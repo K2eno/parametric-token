@@ -2,7 +2,9 @@
 pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "../interfaces/IPredictionToken.sol";
+import "../libraries/Library.sol";
 
 contract PredictionToken is Ownable, IPredictionToken {
     // ───── Parameter constants ─────
@@ -56,36 +58,24 @@ contract PredictionToken is Ownable, IPredictionToken {
 
     // ───── Modifiers ─────
     modifier onlyEngine() {
-        require(msg.sender == _engine, "PredictionToken: not engine");
+        require(msg.sender == _engine);
         _;
     }
 
     modifier onlyNormal(address account) {
-        require(
-            _accounts[account].accountType == AccountType.Normal,
-            "Not normal account"
-        );
+        require(_accounts[account].accountType == AccountType.Normal);
         _;
     }
 
     modifier onlySuper(address account) {
-        require(
-            _accounts[account].accountType == AccountType.Super,
-            "Not super account"
-        );
+        require(_accounts[account].accountType == AccountType.Super);
         _;
     }
 
     modifier onlyValidSub(address account, uint48 subId) {
         if (subId > 0) {
-            require(
-                _accounts[account].accountType == AccountType.Super,
-                "Not a super account"
-            );
-            require(
-                subId < _supers[account].subsCount,
-                "Sub-account doesn't exist"
-            );
+            require(_accounts[account].accountType == AccountType.Super);
+            require(subId < _supers[account].subsCount);
         }
         _;
     }
@@ -98,9 +88,6 @@ contract PredictionToken is Ownable, IPredictionToken {
         _name = name_;
         _symbol = symbol_;
 
-        // Parameter config:
-        // param0 = predictionPrice (mutable, 8 decimals)
-        // param1 = round (immutable, 0 decimals)
         _paramConfig[0] = ParamConfig({
             name: "prediction",
             decimals: 8,
@@ -165,7 +152,7 @@ contract PredictionToken is Ownable, IPredictionToken {
     function convertToSuper(
         address account
     ) external onlyNormal(account) returns (bool) {
-        require(msg.sender == account, "Only owner can convert");
+        require(msg.sender == account);
         Account storage acc = _accounts[account];
         acc.accountType = AccountType.Super;
         _supers[account].subs.push(
@@ -181,7 +168,7 @@ contract PredictionToken is Ownable, IPredictionToken {
     function createSubAccount(
         address account
     ) external onlySuper(account) returns (uint48) {
-        require(msg.sender == account, "Only owner can create");
+        require(msg.sender == account);
         SuperAccount storage acc = _supers[account];
         acc.subs.push(SubAccount({balance: 0, parameters: _parametersInit}));
         acc.subsCount = uint48(acc.subs.length);
@@ -215,7 +202,7 @@ contract PredictionToken is Ownable, IPredictionToken {
         address account,
         uint48 subId
     ) public view onlyValidSub(account, subId) returns (uint64) {
-        require(paramIndex < NUMBER_OF_PARAMETERS, "Invalid param index");
+        require(paramIndex < NUMBER_OF_PARAMETERS);
         if (_accounts[account].accountType != AccountType.Super) {
             return _accounts[account].parameters[paramIndex];
         }
@@ -232,20 +219,6 @@ contract PredictionToken is Ownable, IPredictionToken {
         );
     }
 
-    function getPredictionPrice(
-        address account,
-        uint48 subId
-    ) public view onlyValidSub(account, subId) returns (uint64) {
-        return parameterOf(0, account, subId);
-    }
-
-    function getRound(
-        address account,
-        uint48 subId
-    ) public view onlyValidSub(account, subId) returns (uint64) {
-        return parameterOf(1, account, subId);
-    }
-
     // Parametric: allowances
     function approveForSub(
         uint48 ownerSubId,
@@ -254,16 +227,9 @@ contract PredictionToken is Ownable, IPredictionToken {
         bool oneOff
     ) external returns (bool) {
         address owner = msg.sender;
-        require(
-            _accounts[owner].accountType == AccountType.Super,
-            "Not super account"
-        );
-        require(
-            ownerSubId < _supers[owner].subsCount,
-            "Sub-account doesn't exist"
-        );
-        if (oneOff)
-            require(amount > 0, "OneOff requires positive sub allowance");
+        require(_accounts[owner].accountType == AccountType.Super);
+        require(ownerSubId < _supers[owner].subsCount);
+        if (oneOff) require(amount > 0);
 
         Allowance storage al = _allowances[owner][spender];
         al.subId = ownerSubId;
@@ -336,18 +302,6 @@ contract PredictionToken is Ownable, IPredictionToken {
                 _allowances[owner][spender].total = current - value;
             }
         }
-    }
-
-    function _weightedAverage(
-        uint64 param1,
-        uint256 amount1,
-        uint64 param2,
-        uint256 amount2
-    ) private pure returns (uint64) {
-        require(param1 > 0 && amount1 > 0, "Invalid amounts");
-        uint256 product = uint256(param1) * amount1 + uint256(param2) * amount2;
-        uint256 sum = amount1 + amount2;
-        return uint64(product / sum);
     }
 
     function _sufficientAllowanceForSub(
@@ -429,11 +383,11 @@ contract PredictionToken is Ownable, IPredictionToken {
     }
 
     function _updateParametersBeforeExecution(
-        address from_,
-        uint48 fromSubId_,
-        address to_,
-        uint48 toSubId_,
-        uint256 amount_
+        address from,
+        uint48 fromSubId,
+        address to,
+        uint48 toSubId,
+        uint256 amount
     ) private {
         // Get pre‑execution prediction prices and balances
         uint64 fromPrice;
@@ -441,44 +395,49 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint256 fromBalance;
         uint256 toBalance;
 
-        if (_accounts[from_].accountType == AccountType.Super) {
-            fromPrice = _supers[from_].subs[fromSubId_].parameters[0];
-            fromBalance = _supers[from_].subs[fromSubId_].balance;
+        if (_accounts[from].accountType == AccountType.Super) {
+            fromPrice = _supers[from].subs[fromSubId].parameters[0];
+            fromBalance = _supers[from].subs[fromSubId].balance;
         } else {
-            fromPrice = _accounts[from_].parameters[0];
-            fromBalance = _accounts[from_].balance;
+            fromPrice = _accounts[from].parameters[0];
+            fromBalance = _accounts[from].balance;
         }
 
-        if (_accounts[to_].accountType == AccountType.Super) {
-            toPrice = _supers[to_].subs[toSubId_].parameters[0];
-            toBalance = _supers[to_].subs[toSubId_].balance;
+        if (_accounts[to].accountType == AccountType.Super) {
+            toPrice = _supers[to].subs[toSubId].parameters[0];
+            toBalance = _supers[to].subs[toSubId].balance;
         } else {
-            toPrice = _accounts[to_].parameters[0];
-            toBalance = _accounts[to_].balance;
+            toPrice = _accounts[to].parameters[0];
+            toBalance = _accounts[to].balance;
         }
 
         // Update recipient's predictionPrice (weighted average)
         if (toBalance == 0) {
             toPrice = fromPrice;
         } else {
-            toPrice = _weightedAverage(fromPrice, amount_, toPrice, toBalance);
+            toPrice = Lib.weightedAverage(
+                fromPrice,
+                amount,
+                toPrice,
+                toBalance
+            );
         }
 
         // Store updated price in recipient
-        if (_accounts[to_].accountType == AccountType.Super) {
-            _supers[to_].subs[toSubId_].parameters[0] = toPrice;
+        if (_accounts[to].accountType == AccountType.Super) {
+            _supers[to].subs[toSubId].parameters[0] = toPrice;
         } else {
-            _accounts[to_].parameters[0] = toPrice;
+            _accounts[to].parameters[0] = toPrice;
         }
 
         // Clear sender's price if balance becomes zero
-        if (fromBalance == amount_) {
-            if (_accounts[from_].accountType == AccountType.Super) {
-                _supers[from_].subs[fromSubId_].parameters[0] = _parametersInit[
+        if (fromBalance == amount) {
+            if (_accounts[from].accountType == AccountType.Super) {
+                _supers[from].subs[fromSubId].parameters[0] = _parametersInit[
                     0
                 ];
             } else {
-                _accounts[from_].parameters[0] = _parametersInit[0];
+                _accounts[from].parameters[0] = _parametersInit[0];
             }
         }
     }
@@ -491,9 +450,9 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 toSubId,
         uint256 amount
     ) internal returns (bool) {
-        require(from != address(0), "ERC20: transfer from zero");
-        require(to != address(0), "ERC20: transfer to zero");
-        require(amount > 0, "Void amount");
+        require(from != address(0));
+        require(to != address(0));
+        require(amount > 0);
 
         // Check immutable parameter conflict (round)
         require(
@@ -533,10 +492,10 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint64 predictionPrice,
         uint64 round
     ) external {
-        require(to != address(0), "Invalid account");
+        require(to != address(0));
         require(round < _maxRounds, "Round must be 0-4");
-        require(amount > 0, "Void amount");
-        require(predictionPrice > 0, "Void prediction");
+        require(amount > 0);
+        require(predictionPrice > 0);
 
         _parametricMint(to, amount, predictionPrice, round);
     }
@@ -546,106 +505,102 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 subId,
         uint256 amount
     ) external onlyEngine onlyValidSub(from, subId) {
-        require(from != address(0), "Invalid account");
+        require(from != address(0));
         _parametricBurn(from, subId, amount);
     }
 
     function _parametricMint(
-        address account_,
-        // uint48 subId,
-        uint256 amount_,
+        address account,
+        uint256 amount,
         uint64 predictionPrice,
         uint64 round
     ) internal {
-        Account storage acc = _accounts[account_];
+        Account storage acc = _accounts[account];
         require(
-            _noParamsConflict(address(0), 0, account_, 0),
+            _noParamsConflict(address(0), 0, account, 0),
             "Conflict of immutable parameters"
         );
 
         // Determine target sub‑account
         if (acc.accountType == AccountType.Super) {
-            SuperAccount storage superAcc = _supers[account_];
+            SuperAccount storage superAcc = _supers[account];
             SubAccount storage sub0 = superAcc.subs[0];
 
             // Update predictionPrice (weighted average)
             if (sub0.balance == 0) {
                 sub0.parameters[0] = predictionPrice;
             } else {
-                sub0.parameters[0] = _weightedAverage(
+                sub0.parameters[0] = Lib.weightedAverage(
                     predictionPrice,
-                    amount_,
+                    amount,
                     sub0.parameters[0],
                     sub0.balance
                 );
             }
 
-            sub0.balance += amount_;
-            acc.balance += amount_;
+            sub0.balance += amount;
+            acc.balance += amount;
         } else {
             if (acc.balance == 0) {
                 acc.parameters[0] = predictionPrice;
                 acc.parameters[1] = round;
             } else {
-                acc.parameters[0] = _weightedAverage(
+                acc.parameters[0] = Lib.weightedAverage(
                     predictionPrice,
-                    amount_,
+                    amount,
                     acc.parameters[0],
                     acc.balance
                 );
             }
 
-            acc.balance += amount_;
+            acc.balance += amount;
         }
 
-        _totalSupply += amount_;
-        emit Transfer(address(0), account_, amount_);
+        _totalSupply += amount;
+        emit ParametricTransfer(address(0), 0, account, 0, amount);
+        emit Transfer(address(0), account, amount);
     }
 
     function _parametricBurn(
-        address account_,
+        address account,
         uint48 subId,
-        uint256 amount_
+        uint256 amount
     ) internal {
-        require(amount_ > 0, "Void amount");
-        Account storage acc = _accounts[account_];
+        require(amount > 0, "Void amount");
+        Account storage acc = _accounts[account];
 
         if (acc.accountType == AccountType.Super) {
-            SuperAccount storage superAcc = _supers[account_];
+            SuperAccount storage superAcc = _supers[account];
             require(subId < superAcc.subsCount, "Sub-account doesn't exist");
             SubAccount storage sub = superAcc.subs[subId];
-            require(sub.balance >= amount_, "Insufficient balance");
-            sub.balance -= amount_;
+            require(sub.balance >= amount, "Insufficient balance");
+            sub.balance -= amount;
             if (sub.balance == 0) {
                 // Reset parameters to default
                 sub.parameters = _parametersInit;
             }
-            acc.balance -= amount_;
+            acc.balance -= amount;
         } else {
             require(subId == 0, "Normal account cannot have subId > 0");
-            require(acc.balance >= amount_, "Insufficient balance");
-            acc.balance -= amount_;
+            require(acc.balance >= amount, "Insufficient balance");
+            acc.balance -= amount;
             if (acc.balance == 0) {
                 acc.parameters = _parametersInit;
             }
         }
 
-        _totalSupply -= amount_;
-        emit ParametricTransfer(account_, subId, address(0), 0, amount_);
-        emit Transfer(account_, address(0), amount_);
+        _totalSupply -= amount;
+        emit ParametricTransfer(account, subId, address(0), 0, amount);
+        emit Transfer(account, address(0), amount);
     }
 
     // Engine management
-    function setEngine(address engine_) external onlyOwner {
-        require(engine_ != address(0), "Zero engine address");
-        _engine = engine_;
+    function setEngine(address engine) external onlyOwner {
+        require(engine != address(0), "Zero engine address");
+        _engine = engine;
     }
 
     function setMaxRounds(uint64 maxRounds) external onlyEngine {
         _maxRounds = maxRounds;
-    }
-
-    function engine() external view returns (address) {
-        return _engine;
     }
 }

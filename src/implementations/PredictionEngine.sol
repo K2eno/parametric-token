@@ -135,15 +135,12 @@ contract PredictionEngine is Ownable, IPredictionEngine {
             "Token was already reported"
         );
         require(
-            _tokenContract.getRound(trader, subId) == round,
+            _tokenContract.parameterOf(1, trader, subId) == round,
             "Token has a different round"
         );
 
         // Get prediction price from token
-        uint64 predictionPrice = _tokenContract.getPredictionPrice(
-            trader,
-            subId
-        );
+        uint64 predictionPrice = _tokenContract.parameterOf(0, trader, subId);
 
         // Get asset price
         uint256 assetPrice = data.assetPrice;

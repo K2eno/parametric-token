@@ -11,12 +11,5 @@ interface IPredictionToken is IParametricToken {
         uint64 round
     ) external;
     function burn(address from, uint48 subId, uint256 amount) external;
-
     function setMaxRounds(uint64 maxRounds) external;
-
-    function getPredictionPrice(
-        address trader,
-        uint48 subId
-    ) external returns (uint64);
-    function getRound(address trader, uint48 subId) external returns (uint64);
 }
