@@ -3,3 +3,10 @@ out/
 broadcast/
 
 foundry.lock
+
+node_modules/
+package-lock.json
+package.json
+
+.vscode/
+.prettierrc
