@@ -4,10 +4,14 @@ pragma solidity ^0.8.30;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "../interfaces/ITenureToken.sol";
+import "../libraries/Lib.sol";
 
 contract TenureToken is Ownable, ITenureToken {
-    // Parameter constants
+    // ====== CONSTANTS ======
+
     uint8 public constant NUMBER_OF_PARAMETERS = 1;
+
+    // ====== STRUCTS ======
 
     // ParamConfig
     struct ParamConfig {
@@ -15,7 +19,6 @@ contract TenureToken is Ownable, ITenureToken {
         uint8 decimals;
         bool isMutable;
     }
-    ParamConfig[NUMBER_OF_PARAMETERS] private _paramConfig;
 
     // Account & Sub‑account storage
     struct Account {
@@ -32,15 +35,6 @@ contract TenureToken is Ownable, ITenureToken {
         uint48 subsCount;
     }
 
-    // ERC20 state
-    string private _name;
-    string private _symbol;
-    uint256 private _totalSupply;
-
-    mapping(address => Account) private _accounts;
-    mapping(address => SuperAccount) private _supers;
-    uint64[NUMBER_OF_PARAMETERS] private _parametersInit; // default zero
-
     // Allowance storage
     struct Allowance {
         uint256 total;
@@ -48,12 +42,26 @@ contract TenureToken is Ownable, ITenureToken {
         uint48 subId;
         bool oneOff;
     }
+
+    // ====== STATE ======
+
+    // ERC-20 state
+    string private _name;
+    string private _symbol;
+    uint256 private _totalSupply;
+
+    // Core state
+    uint64[NUMBER_OF_PARAMETERS] private _parametersInit; // default zero
+    ParamConfig[NUMBER_OF_PARAMETERS] private _paramConfig;
+
+    mapping(address => Account) private _accounts;
+    mapping(address => SuperAccount) private _supers;
     mapping(address => mapping(address => Allowance)) private _allowances;
 
-    // Engine
     address private _engine;
 
-    // Modifiers
+    // ====== MODIFIERS ======
+
     modifier onlyEngine() {
         require(msg.sender == _engine, "InverseToken: not engine");
         _;
@@ -89,10 +97,15 @@ contract TenureToken is Ownable, ITenureToken {
         _;
     }
 
-    // Constructor
-    constructor(string memory name, string memory symbol) Ownable(msg.sender) {
-        _name = name;
-        _symbol = symbol;
+    // ====== CONSTRUCTOR ======
+
+    constructor(
+        string memory name_,
+        string memory symbol_
+    ) Ownable(msg.sender) {
+        _name = name_;
+        _symbol = symbol_;
+
         _paramConfig[0] = ParamConfig({
             name: "mintTime",
             decimals: 0,
@@ -100,7 +113,58 @@ contract TenureToken is Ownable, ITenureToken {
         });
     }
 
-    // ERC20 overrides
+    // ====== CONTRACT MANAGEMENT ======
+
+    function setEngine(address engine_) external onlyOwner {
+        require(engine_ != address(0), "Zero engine address");
+        _engine = engine_;
+    }
+
+    // ====== ERC-20 FUNCTIONS ======
+
+    // ERC-20 getters
+    function name() external view returns (string memory) {
+        return _name;
+    }
+
+    function symbol() external view returns (string memory) {
+        return _symbol;
+    }
+
+    function decimals() external pure returns (uint8) {
+        return 18;
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) public view override returns (uint256) {
+        return _accounts[account].balance;
+    }
+
+    function allowance(
+        address owner,
+        address spender
+    ) public view override returns (uint256) {
+        return _allowances[owner][spender].total;
+    }
+
+    // ERC-20 allowance
+    function approve(
+        address spender,
+        uint256 amount
+    ) public override returns (bool) {
+        address owner = msg.sender;
+        Allowance storage al = _allowances[owner][spender];
+        al.total = amount;
+        if (al.sub > amount) al.sub = amount;
+        if (amount == 0) al.oneOff = false;
+        emit Approval(owner, spender, amount);
+        return true;
+    }
+
+    // ERC-20 transfers
     function transfer(
         address to,
         uint256 amount
@@ -118,35 +182,9 @@ contract TenureToken is Ownable, ITenureToken {
         return _parametricTransfer(from, 0, to, 0, amount);
     }
 
-    function approve(
-        address spender,
-        uint256 amount
-    ) public override returns (bool) {
-        address owner = msg.sender;
-        Allowance storage al = _allowances[owner][spender];
-        al.total = amount;
-        if (al.sub > amount) al.sub = amount;
-        if (amount == 0) al.oneOff = false;
-        emit Approval(owner, spender, amount);
-        return true;
-    }
+    // ====== PARAMETRIC FUNCTIONS ======
 
-    function balanceOf(address account) public view override returns (uint256) {
-        return _accounts[account].balance;
-    }
-
-    function allowance(
-        address owner,
-        address spender
-    ) public view override returns (uint256) {
-        return _allowances[owner][spender].total;
-    }
-
-    function totalSupply() external view returns (uint256) {
-        return _totalSupply;
-    }
-
-    // ───── Parametric: account management ─────
+    // Super account: management
     function convertToSuper(
         address account
     ) external onlyNormal(account) returns (bool) {
@@ -179,56 +217,7 @@ contract TenureToken is Ownable, ITenureToken {
         return newSubId;
     }
 
-    function accountType(address account) external view returns (AccountType) {
-        return _accounts[account].accountType;
-    }
-
-    // ───── Parametric: queries ─────
-    function parametricBalanceOf(
-        address account,
-        uint48 subId
-    ) external view onlyValidSub(account, subId) returns (uint256) {
-        if (_accounts[account].accountType == AccountType.Normal)
-            return _accounts[account].balance;
-        return _supers[account].subs[subId].balance;
-    }
-
-    function subsCountOf(
-        address superAccount
-    ) external view onlySuper(superAccount) returns (uint48) {
-        return _supers[superAccount].subsCount;
-    }
-
-    function parameterOf(
-        uint8 paramIndex,
-        address account,
-        uint48 subId
-    ) public view onlyValidSub(account, subId) returns (uint64) {
-        require(paramIndex < NUMBER_OF_PARAMETERS, "Invalid param index");
-        if (_accounts[account].accountType != AccountType.Super) {
-            return _accounts[account].parameters[paramIndex];
-        }
-        return _supers[account].subs[subId].parameters[paramIndex];
-    }
-
-    function paramConfig(
-        uint8 index
-    ) external view returns (bytes32, uint8, bool) {
-        return (
-            _paramConfig[index].name,
-            _paramConfig[index].decimals,
-            _paramConfig[index].isMutable
-        );
-    }
-
-    function getMintTime(
-        address account,
-        uint48 subId
-    ) public view onlyValidSub(account, subId) returns (uint64) {
-        return parameterOf(0, account, subId);
-    }
-
-    // ───── Parametric: allowances ─────
+    // Parametric: allowances
     function approveForSub(
         uint48 ownerSubId,
         address spender,
@@ -257,17 +246,7 @@ contract TenureToken is Ownable, ITenureToken {
         return true;
     }
 
-    function allowanceForSub(
-        address account,
-        uint48 subId,
-        address spender
-    ) external view onlyValidSub(account, subId) returns (uint256, bool) {
-        Allowance storage al = _allowances[account][spender];
-        if (al.subId == subId) return (al.sub, al.oneOff);
-        return (al.total - al.sub, false); // oneOff only applies to the exact subId
-    }
-
-    // ───── Parametric: transfers ─────
+    // Parametric: transfers
     function parametricTransfer(
         uint48 fromSubId,
         address to,
@@ -303,7 +282,37 @@ contract TenureToken is Ownable, ITenureToken {
         return _parametricTransfer(from, fromSubId, to, toSubId, amount);
     }
 
-    // ───── Internal helpers ─────
+    // Parametric: mint & burn
+    function mint(address to, uint256 amount) external onlyEngine {
+        require(to != address(0), "Invalid account");
+        _parametricMint(to, amount);
+    }
+
+    function burn(
+        address from,
+        uint48 subId,
+        uint256 amount
+    ) external onlyEngine onlyValidSub(from, subId) {
+        require(from != address(0), "Invalid account");
+        _parametricBurn(from, subId, amount);
+    }
+
+    // ====== HELPERS ======
+
+    function _sufficientAllowanceForSub(
+        address owner,
+        address spender,
+        uint48 fromSubId,
+        uint256 amount
+    ) private view returns (bool) {
+        Allowance storage al = _allowances[owner][spender];
+        if (fromSubId == al.subId) {
+            return al.sub >= amount;
+        } else {
+            return al.total - al.sub >= amount;
+        }
+    }
+
     function _spendAllowance(
         address owner,
         address spender,
@@ -317,32 +326,6 @@ contract TenureToken is Ownable, ITenureToken {
                 require(current >= value, "Insufficient allowance");
                 _allowances[owner][spender].total = current - value;
             }
-        }
-    }
-
-    function _weightedAverage(
-        uint64 param1,
-        uint256 amount1,
-        uint64 param2,
-        uint256 amount2
-    ) private pure returns (uint64) {
-        require(param1 > 0 && amount1 > 0, "Invalid amounts");
-        uint256 product = uint256(param1) * amount1 + uint256(param2) * amount2;
-        uint256 sum = amount1 + amount2;
-        return uint64(product / sum);
-    }
-
-    function _sufficientAllowanceForSub(
-        address owner,
-        address spender,
-        uint48 fromSubId,
-        uint256 amount
-    ) private view returns (bool) {
-        Allowance storage al = _allowances[owner][spender];
-        if (fromSubId == al.subId) {
-            return al.sub >= amount;
-        } else {
-            return al.total - al.sub >= amount;
         }
     }
 
@@ -401,7 +384,7 @@ contract TenureToken is Ownable, ITenureToken {
         if (toBalance == 0) {
             toMintTime = fromMintTime;
         } else {
-            toMintTime = _weightedAverage(
+            toMintTime = Lib.weightedAverage(
                 fromMintTime,
                 amount,
                 toMintTime,
@@ -461,35 +444,20 @@ contract TenureToken is Ownable, ITenureToken {
         return true;
     }
 
-    // Mint & Burn (engine only)
-    function mint(address to, uint256 amount) external onlyEngine {
-        require(to != address(0), "Invalid account");
-        _parametricMint(to, amount);
-    }
-
-    function burn(
-        address from,
-        uint48 subId,
-        uint256 amount
-    ) external onlyEngine onlyValidSub(from, subId) {
-        require(from != address(0), "Invalid account");
-        _parametricBurn(from, subId, amount);
-    }
-
     function _parametricMint(address account, uint256 amount) internal {
         require(amount > 0, "Void amount");
         Account storage acc = _accounts[account];
-        uint64 mintTime = uint64(block.timestamp);
+        uint64 _mintTime = uint64(block.timestamp);
 
         if (acc.accountType == AccountType.Super) {
             SuperAccount storage superAcc = _supers[account];
             require(superAcc.subsCount > 0, "No sub-accounts");
             SubAccount storage sub0 = superAcc.subs[0];
             if (sub0.balance == 0) {
-                sub0.parameters[0] = mintTime;
+                sub0.parameters[0] = _mintTime;
             } else {
-                sub0.parameters[0] = _weightedAverage(
-                    mintTime,
+                sub0.parameters[0] = Lib.weightedAverage(
+                    _mintTime,
                     amount,
                     sub0.parameters[0],
                     sub0.balance
@@ -498,10 +466,10 @@ contract TenureToken is Ownable, ITenureToken {
             sub0.balance += amount;
         } else {
             if (acc.balance == 0) {
-                acc.parameters[0] = mintTime;
+                acc.parameters[0] = _mintTime;
             } else {
-                acc.parameters[0] = _weightedAverage(
-                    mintTime,
+                acc.parameters[0] = Lib.weightedAverage(
+                    _mintTime,
                     amount,
                     acc.parameters[0],
                     acc.balance
@@ -544,13 +512,67 @@ contract TenureToken is Ownable, ITenureToken {
         emit Transfer(account, address(0), amount);
     }
 
-    // Engine management
-    function setEngine(address engine_) external onlyOwner {
-        require(engine_ != address(0), "Zero engine address");
-        _engine = engine_;
+    // ====== PARAMETRIC GETTERS ======
+
+    // Super account data
+    function accountType(address account) external view returns (AccountType) {
+        return _accounts[account].accountType;
     }
 
-    function engine() external view returns (address) {
-        return _engine;
+    function subsCountOf(
+        address superAccount
+    ) external view onlySuper(superAccount) returns (uint48) {
+        return _supers[superAccount].subsCount;
+    }
+
+    // Parameters data
+    function paramConfig(
+        uint8 index
+    ) external view returns (bytes32, uint8, bool) {
+        return (
+            _paramConfig[index].name,
+            _paramConfig[index].decimals,
+            _paramConfig[index].isMutable
+        );
+    }
+
+    function parameterOf(
+        uint8 paramIndex,
+        address account,
+        uint48 subId
+    ) public view onlyValidSub(account, subId) returns (uint64) {
+        require(paramIndex < NUMBER_OF_PARAMETERS, "Invalid param index");
+        if (_accounts[account].accountType != AccountType.Super) {
+            return _accounts[account].parameters[paramIndex];
+        }
+        return _supers[account].subs[subId].parameters[paramIndex];
+    }
+
+    function mintTime(
+        address account,
+        uint48 subId
+    ) public view onlyValidSub(account, subId) returns (uint64) {
+        return parameterOf(0, account, subId);
+    }
+
+    // Parametric balance
+    function parametricBalanceOf(
+        address account,
+        uint48 subId
+    ) external view onlyValidSub(account, subId) returns (uint256) {
+        if (_accounts[account].accountType == AccountType.Normal)
+            return _accounts[account].balance;
+        return _supers[account].subs[subId].balance;
+    }
+
+    // Parametric allowance
+    function allowanceForSub(
+        address account,
+        uint48 subId,
+        address spender
+    ) external view onlyValidSub(account, subId) returns (uint256, bool) {
+        Allowance storage al = _allowances[account][spender];
+        if (al.subId == subId) return (al.sub, al.oneOff);
+        return (al.total - al.sub, false); // oneOff only applies to the exact subId
     }
 }

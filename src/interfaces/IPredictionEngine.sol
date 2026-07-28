@@ -2,11 +2,15 @@
 pragma solidity ^0.8.30;
 
 interface IPredictionEngine {
+    // ====== CONSTANTS ======
+
     enum Status {
         Active,
         Reporting,
         Claiming
     }
+
+    // ====== EVENTS ======
 
     event RoundClosed(uint64 indexed round, uint64 range, uint64 assetPrice);
     event ReportingClosed(uint64 indexed round, uint256 totalWeight);
@@ -24,6 +28,8 @@ interface IPredictionEngine {
         uint256 points
     );
 
+    // ====== FUNCTIONS ======
+
     // Admin functions
     function closeRound(uint64 round, uint64 range) external;
     function closeReporting(uint64 round) external;
@@ -32,17 +38,18 @@ interface IPredictionEngine {
     function report(uint64 round, uint48 subId) external;
     function claim(uint64 round, uint48 subId) external;
 
-    // View functions
-    function getStartPrice() external view returns (uint64);
-    function getWeight(
+    // ====== GETTERS ======
+
+    function startPrice() external view returns (uint64);
+    function weight(
         uint64 round,
         address trader,
         uint48 subId
     ) external view returns (uint256);
-    function getTotalWeight(uint64 round) external view returns (uint256);
-    function getAssetPrice(uint64 round) external view returns (uint64);
-    function getRoundStatus(uint64 round) external view returns (Status);
-    function getPointsEarned(
+    function totalWeight(uint64 round) external view returns (uint256);
+    function assetPrice(uint64 round) external view returns (uint64);
+    function roundStatus(uint64 round) external view returns (Status);
+    function pointsEarned(
         uint64 round,
         address trader
     ) external view returns (uint256);

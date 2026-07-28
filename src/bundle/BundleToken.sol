@@ -3,31 +3,28 @@ pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-import "../interfaces/IPredictionToken.sol";
-import "../libraries/Library.sol";
+import "../interfaces/IBundleToken.sol";
+import "../libraries/Lib.sol";
 
-contract PredictionToken is Ownable, IPredictionToken {
-    // ───── Parameter constants ─────
-    uint8 public constant NUMBER_OF_PARAMETERS = 2;
+contract BundleToken is Ownable, IParametricToken {
+    // ====== CONSTANTS ======
 
-    // ───── ParamConfig ─────
+    uint8 public constant NUMBER_OF_PARAMETERS = 1; // only anchor (mutable)
+
+    // ====== STRUCTS ======
+
+    // ParamConfig
     struct ParamConfig {
         bytes32 name;
         uint8 decimals;
         bool isMutable;
     }
-    ParamConfig[NUMBER_OF_PARAMETERS] private _paramConfig;
 
-    // ───── ERC20 state ─────
-    string private _name;
-    string private _symbol;
-    uint256 private _totalSupply;
-
-    // ───── Account & Sub‑account storage ─────
+    // Account & Sub‑account storage
     struct Account {
         AccountType accountType;
         uint256 balance;
-        uint64[NUMBER_OF_PARAMETERS] parameters;
+        uint64[NUMBER_OF_PARAMETERS] parameters; // [0] = anchor
     }
     struct SubAccount {
         uint256 balance;
@@ -38,11 +35,7 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 subsCount;
     }
 
-    mapping(address => Account) private _accounts;
-    mapping(address => SuperAccount) private _supers;
-    uint64[NUMBER_OF_PARAMETERS] private _parametersInit; // default zero
-
-    // ───── Allowance storage ─────
+    // Allowance storage
     struct Allowance {
         uint256 total;
         uint256 sub;
@@ -50,37 +43,62 @@ contract PredictionToken is Ownable, IPredictionToken {
         bool oneOff;
     }
 
-    // ───── Engine ─────
+    // ====== STATE ======
+
+    // ERC20 state
+    string private _name;
+    string private _symbol;
+    uint256 private _totalSupply;
+
+    // Core state
+    uint64[NUMBER_OF_PARAMETERS] private _parametersInit; // default zero
+    ParamConfig[NUMBER_OF_PARAMETERS] private _paramConfig;
+
+    mapping(address => Account) private _accounts;
+    mapping(address => SuperAccount) private _supers;
+    mapping(address => mapping(address => Allowance)) private _allowances;
+
     address private _engine;
 
-    mapping(address => mapping(address => Allowance)) private _allowances;
-    uint64 private _maxRounds;
+    // ====== MODIFIERS ======
 
-    // ───── Modifiers ─────
     modifier onlyEngine() {
-        require(msg.sender == _engine);
+        require(msg.sender == _engine, "BundleToken: not engine");
         _;
     }
 
     modifier onlyNormal(address account) {
-        require(_accounts[account].accountType == AccountType.Normal);
+        require(
+            _accounts[account].accountType == AccountType.Normal,
+            "Not normal account"
+        );
         _;
     }
 
     modifier onlySuper(address account) {
-        require(_accounts[account].accountType == AccountType.Super);
+        require(
+            _accounts[account].accountType == AccountType.Super,
+            "Not super account"
+        );
         _;
     }
 
     modifier onlyValidSub(address account, uint48 subId) {
         if (subId > 0) {
-            require(_accounts[account].accountType == AccountType.Super);
-            require(subId < _supers[account].subsCount);
+            require(
+                _accounts[account].accountType == AccountType.Super,
+                "Not a super account"
+            );
+            require(
+                subId < _supers[account].subsCount,
+                "Sub-account doesn't exist"
+            );
         }
         _;
     }
 
-    // Constructor
+    // ====== CONSTRUCTOR ======
+
     constructor(
         string memory name_,
         string memory symbol_
@@ -89,36 +107,40 @@ contract PredictionToken is Ownable, IPredictionToken {
         _symbol = symbol_;
 
         _paramConfig[0] = ParamConfig({
-            name: "prediction",
-            decimals: 8,
+            name: "anchor",
+            decimals: 8, // USD price with 8 decimals
             isMutable: true
-        });
-        _paramConfig[1] = ParamConfig({
-            name: "round",
-            decimals: 0,
-            isMutable: false
         });
     }
 
-    // ───── ERC‑20 functions ─────
+    // ====== MANAGEMENT FUNCTIONS ======
+
+    function setEngine(address engine) external onlyOwner {
+        require(engine != address(0), "Zero engine address");
+        _engine = engine;
+    }
+
+    // ====== ERC-20 FUNCTIONS ======
+
+    // ERC-20 getters
     function name() external view returns (string memory) {
         return _name;
     }
+
     function symbol() external view returns (string memory) {
         return _symbol;
     }
+
     function decimals() external pure returns (uint8) {
         return 18;
     }
+
     function totalSupply() external view returns (uint256) {
         return _totalSupply;
     }
+
     function balanceOf(address account) public view returns (uint256) {
         return _accounts[account].balance;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        return _parametricTransfer(msg.sender, 0, to, 0, amount);
     }
 
     function allowance(
@@ -128,6 +150,7 @@ contract PredictionToken is Ownable, IPredictionToken {
         return _allowances[owner][spender].total;
     }
 
+    // ERC-20 approval
     function approve(address spender, uint256 amount) external returns (bool) {
         address owner = msg.sender;
         Allowance storage al = _allowances[owner][spender];
@@ -136,6 +159,11 @@ contract PredictionToken is Ownable, IPredictionToken {
         if (amount == 0) al.oneOff = false;
         emit Approval(owner, spender, amount);
         return true;
+    }
+
+    // ERC-20 transfers
+    function transfer(address to, uint256 amount) external returns (bool) {
+        return _parametricTransfer(msg.sender, 0, to, 0, amount);
     }
 
     function transferFrom(
@@ -148,11 +176,13 @@ contract PredictionToken is Ownable, IPredictionToken {
         return _parametricTransfer(from, 0, to, 0, amount);
     }
 
-    // ───── Parametric: account management ─────
+    // ====== PARAMETRIC FUNCTIONS ======
+
+    // Super account: management
     function convertToSuper(
         address account
     ) external onlyNormal(account) returns (bool) {
-        require(msg.sender == account);
+        require(msg.sender == account, "Only owner can convert");
         Account storage acc = _accounts[account];
         acc.accountType = AccountType.Super;
         _supers[account].subs.push(
@@ -168,55 +198,13 @@ contract PredictionToken is Ownable, IPredictionToken {
     function createSubAccount(
         address account
     ) external onlySuper(account) returns (uint48) {
-        require(msg.sender == account);
+        require(msg.sender == account, "Only owner can create");
         SuperAccount storage acc = _supers[account];
         acc.subs.push(SubAccount({balance: 0, parameters: _parametersInit}));
         acc.subsCount = uint48(acc.subs.length);
         uint48 newSubId = acc.subsCount - 1;
         emit SubAccountCreated(account, newSubId);
         return newSubId;
-    }
-
-    function accountType(address account) external view returns (AccountType) {
-        return _accounts[account].accountType;
-    }
-
-    // ───── Parametric: queries ─────
-    function parametricBalanceOf(
-        address account,
-        uint48 subId
-    ) external view onlyValidSub(account, subId) returns (uint256) {
-        if (_accounts[account].accountType == AccountType.Normal)
-            return _accounts[account].balance;
-        return _supers[account].subs[subId].balance;
-    }
-
-    function subsCountOf(
-        address superAccount
-    ) external view onlySuper(superAccount) returns (uint48) {
-        return _supers[superAccount].subsCount;
-    }
-
-    function parameterOf(
-        uint8 paramIndex,
-        address account,
-        uint48 subId
-    ) public view onlyValidSub(account, subId) returns (uint64) {
-        require(paramIndex < NUMBER_OF_PARAMETERS);
-        if (_accounts[account].accountType != AccountType.Super) {
-            return _accounts[account].parameters[paramIndex];
-        }
-        return _supers[account].subs[subId].parameters[paramIndex];
-    }
-
-    function paramConfig(
-        uint8 index
-    ) external view returns (bytes32, uint8, bool) {
-        return (
-            _paramConfig[index].name,
-            _paramConfig[index].decimals,
-            _paramConfig[index].isMutable
-        );
     }
 
     // Parametric: allowances
@@ -227,9 +215,16 @@ contract PredictionToken is Ownable, IPredictionToken {
         bool oneOff
     ) external returns (bool) {
         address owner = msg.sender;
-        require(_accounts[owner].accountType == AccountType.Super);
-        require(ownerSubId < _supers[owner].subsCount);
-        if (oneOff) require(amount > 0);
+        require(
+            _accounts[owner].accountType == AccountType.Super,
+            "Not super account"
+        );
+        require(
+            ownerSubId < _supers[owner].subsCount,
+            "Sub-account doesn't exist"
+        );
+        if (oneOff)
+            require(amount > 0, "OneOff requires positive sub allowance");
 
         Allowance storage al = _allowances[owner][spender];
         al.subId = ownerSubId;
@@ -239,16 +234,6 @@ contract PredictionToken is Ownable, IPredictionToken {
 
         emit ApprovalForSub(owner, ownerSubId, spender, amount, oneOff);
         return true;
-    }
-
-    function allowanceForSub(
-        address account,
-        uint48 subId,
-        address spender
-    ) external view onlyValidSub(account, subId) returns (uint256, bool) {
-        Allowance storage al = _allowances[account][spender];
-        if (al.subId == subId) return (al.sub, al.oneOff);
-        return (al.total - al.sub, false);
     }
 
     // Parametric: transfers
@@ -287,7 +272,46 @@ contract PredictionToken is Ownable, IPredictionToken {
         return _parametricTransfer(from, fromSubId, to, toSubId, amount);
     }
 
-    // Internal helpers
+    // Parametric: mint & burn
+    function mint(
+        address to,
+        uint256 amount,
+        uint64 anchor_
+    ) external onlyEngine {
+        require(to != address(0), "Invalid account");
+        require(amount > 0, "Void amount");
+        require(anchor_ > 0, "Zero anchor");
+
+        _parametricMint(to, amount, anchor_);
+    }
+
+    function burn(
+        address from,
+        uint48 subId,
+        uint256 amount
+    ) external onlyEngine onlyValidSub(from, subId) {
+        require(from != address(0), "Invalid account");
+        require(amount > 0, "Void amount");
+
+        _parametricBurn(from, subId, amount);
+    }
+
+    // ====== HELPERS ======
+
+    function _sufficientAllowanceForSub(
+        address owner,
+        address spender,
+        uint48 fromSubId,
+        uint256 amount
+    ) private view returns (bool) {
+        Allowance storage al = _allowances[owner][spender];
+        if (fromSubId == al.subId) {
+            return al.sub >= amount;
+        } else {
+            return al.total - al.sub >= amount;
+        }
+    }
+
     function _spendAllowance(
         address owner,
         address spender,
@@ -301,20 +325,6 @@ contract PredictionToken is Ownable, IPredictionToken {
                 require(current >= value, "Insufficient allowance");
                 _allowances[owner][spender].total = current - value;
             }
-        }
-    }
-
-    function _sufficientAllowanceForSub(
-        address owner_,
-        address spender_,
-        uint48 fromSubId_,
-        uint256 amount_
-    ) private view returns (bool) {
-        Allowance storage al = _allowances[owner_][spender_];
-        if (fromSubId_ == al.subId) {
-            return al.sub >= amount_;
-        } else {
-            return al.total - al.sub >= amount_;
         }
     }
 
@@ -342,46 +352,6 @@ contract PredictionToken is Ownable, IPredictionToken {
         }
     }
 
-    // Immutable parameter conflict check
-    function _noParamsConflict(
-        address from,
-        uint48 fromSubId,
-        address to,
-        uint48 toSubId
-    )
-        private
-        view
-        onlyValidSub(from, fromSubId)
-        onlyValidSub(to, toSubId)
-        returns (bool)
-    {
-        // If recipient balance is zero, accept any round
-        uint256 toBalance =
-            (_accounts[to].accountType == AccountType.Normal)
-                ? _accounts[to].balance
-                : _supers[to].subs[toSubId].balance;
-        if (toBalance == 0) return true;
-
-        // Check immutable parameter (round) for conflict
-        uint64 fromRound;
-        uint64 toRound;
-
-        if (_accounts[from].accountType == AccountType.Normal) {
-            fromRound = _accounts[from].parameters[1];
-        } else {
-            fromRound = _supers[from].subs[fromSubId].parameters[1];
-        }
-
-        if (_accounts[to].accountType == AccountType.Normal) {
-            toRound = _accounts[to].parameters[1];
-        } else {
-            toRound = _supers[to].subs[toSubId].parameters[1];
-        }
-
-        // Otherwise, rounds must match
-        return fromRound == toRound;
-    }
-
     function _updateParametersBeforeExecution(
         address from,
         uint48 fromSubId,
@@ -389,60 +359,65 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 toSubId,
         uint256 amount
     ) private {
-        // Get pre‑execution prediction prices and balances
-        uint64 fromPrice;
-        uint64 toPrice;
+        uint64 fromAnchor;
+        uint64 toAnchor;
         uint256 fromBalance;
         uint256 toBalance;
 
         if (_accounts[from].accountType == AccountType.Super) {
-            fromPrice = _supers[from].subs[fromSubId].parameters[0];
-            fromBalance = _supers[from].subs[fromSubId].balance;
+            SubAccount storage fromSub = _supers[from].subs[fromSubId];
+            fromAnchor = fromSub.parameters[0];
+            fromBalance = fromSub.balance;
         } else {
-            fromPrice = _accounts[from].parameters[0];
+            fromAnchor = _accounts[from].parameters[0];
             fromBalance = _accounts[from].balance;
         }
 
         if (_accounts[to].accountType == AccountType.Super) {
-            toPrice = _supers[to].subs[toSubId].parameters[0];
-            toBalance = _supers[to].subs[toSubId].balance;
+            SubAccount storage toSub = _supers[to].subs[toSubId];
+            toAnchor = toSub.parameters[0];
+            toBalance = toSub.balance;
         } else {
-            toPrice = _accounts[to].parameters[0];
+            toAnchor = _accounts[to].parameters[0];
             toBalance = _accounts[to].balance;
         }
 
-        // Update recipient's predictionPrice (weighted average)
+        // If destination balance is zero, just copy source anchor and set new balance = amount
         if (toBalance == 0) {
-            toPrice = fromPrice;
+            toAnchor = fromAnchor;
+            toBalance = amount;
         } else {
-            toPrice = Lib.weightedAverage(
-                fromPrice,
+            // Combine the existing destination holding with the incoming amount
+            // The incoming amount is considered as a holding with the source anchor.
+            (uint64 combinedAnchor, uint256 combinedBalance) = Lib.combine(
+                fromAnchor,
                 amount,
-                toPrice,
+                toAnchor,
                 toBalance
             );
+            toAnchor = combinedAnchor;
+            toBalance = combinedBalance;
         }
 
-        // Store updated price in recipient
+        // Store updated values in destination
         if (_accounts[to].accountType == AccountType.Super) {
-            _supers[to].subs[toSubId].parameters[0] = toPrice;
+            _supers[to].subs[toSubId].parameters[0] = toAnchor;
+            // balance will be updated after transfer in _parametricTransfer
         } else {
-            _accounts[to].parameters[0] = toPrice;
+            _accounts[to].parameters[0] = toAnchor;
         }
 
-        // Clear sender's price if balance becomes zero
+        // If source balance becomes zero after transfer, reset its parameters
         if (fromBalance == amount) {
             if (_accounts[from].accountType == AccountType.Super) {
-                _supers[from].subs[fromSubId].parameters[0] = _parametersInit[
-                    0
-                ];
+                _supers[from].subs[fromSubId].parameters = _parametersInit;
             } else {
-                _accounts[from].parameters[0] = _parametersInit[0];
+                _accounts[from].parameters = _parametersInit;
             }
         }
     }
 
-    // ───── Core transfer logic ─────
+    // Core transfer logic
     function _parametricTransfer(
         address from,
         uint48 fromSubId,
@@ -450,17 +425,11 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 toSubId,
         uint256 amount
     ) internal returns (bool) {
-        require(from != address(0));
-        require(to != address(0));
-        require(amount > 0);
+        require(from != address(0), "ERC20: transfer from zero");
+        require(to != address(0), "ERC20: transfer to zero");
+        require(amount > 0, "Void amount");
 
-        // Check immutable parameter conflict (round)
-        require(
-            _noParamsConflict(from, fromSubId, to, toSubId),
-            "Conflict of immutable parameters"
-        );
-
-        // Update mutable parameter (predictionPrice)
+        // Update parameters (anchor) before balance changes
         _updateParametersBeforeExecution(from, fromSubId, to, toSubId, amount);
 
         // Perform balance updates
@@ -485,80 +454,50 @@ contract PredictionToken is Ownable, IPredictionToken {
         return true;
     }
 
-    // Mint & Burn
-    function mint(
+    function _parametricMint(
         address to,
         uint256 amount,
-        uint64 predictionPrice,
-        uint64 round
-    ) external {
-        require(to != address(0));
-        require(round < _maxRounds, "Round must be 0-4");
-        require(amount > 0);
-        require(predictionPrice > 0);
-
-        _parametricMint(to, amount, predictionPrice, round);
-    }
-
-    function burn(
-        address from,
-        uint48 subId,
-        uint256 amount
-    ) external onlyEngine onlyValidSub(from, subId) {
-        require(from != address(0));
-        _parametricBurn(from, subId, amount);
-    }
-
-    function _parametricMint(
-        address account,
-        uint256 amount,
-        uint64 predictionPrice,
-        uint64 round
+        uint64 anchor_
     ) internal {
-        Account storage acc = _accounts[account];
-        require(
-            _noParamsConflict(address(0), 0, account, 0),
-            "Conflict of immutable parameters"
-        );
+        Account storage acc = _accounts[to];
 
-        // Determine target sub‑account
         if (acc.accountType == AccountType.Super) {
-            SuperAccount storage superAcc = _supers[account];
+            SuperAccount storage superAcc = _supers[to];
             SubAccount storage sub0 = superAcc.subs[0];
 
-            // Update predictionPrice (weighted average)
-            if (sub0.balance == 0) {
-                sub0.parameters[0] = predictionPrice;
-            } else {
-                sub0.parameters[0] = Lib.weightedAverage(
-                    predictionPrice,
-                    amount,
-                    sub0.parameters[0],
-                    sub0.balance
-                );
-            }
+            uint256 oldSubBalance = sub0.balance;
+            uint64 oldAnchor = sub0.parameters[0];
 
-            sub0.balance += amount;
-            acc.balance += amount;
+            (uint64 newAnchor, uint256 newSubBalance) = Lib.combine(
+                anchor_,
+                amount,
+                oldAnchor,
+                oldSubBalance
+            );
+
+            sub0.parameters[0] = newAnchor;
+            sub0.balance = newSubBalance;
+            acc.balance = acc.balance - oldSubBalance + newSubBalance;
+            _totalSupply = _totalSupply - oldSubBalance + newSubBalance;
         } else {
-            if (acc.balance == 0) {
-                acc.parameters[0] = predictionPrice;
-                acc.parameters[1] = round;
-            } else {
-                acc.parameters[0] = Lib.weightedAverage(
-                    predictionPrice,
-                    amount,
-                    acc.parameters[0],
-                    acc.balance
-                );
-            }
+            // Normal account
+            uint256 oldBalance = acc.balance;
+            uint64 oldAnchor = acc.parameters[0];
 
-            acc.balance += amount;
+            (uint64 newAnchor, uint256 newBalance) = Lib.combine(
+                anchor_,
+                amount,
+                oldAnchor,
+                oldBalance
+            );
+
+            acc.parameters[0] = newAnchor;
+            acc.balance = newBalance;
+            _totalSupply = _totalSupply - oldBalance + newBalance;
         }
 
-        _totalSupply += amount;
-        emit ParametricTransfer(address(0), 0, account, 0, amount);
-        emit Transfer(address(0), account, amount);
+        emit ParametricTransfer(address(0), 0, to, 0, amount);
+        emit Transfer(address(0), to, amount);
     }
 
     function _parametricBurn(
@@ -566,7 +505,6 @@ contract PredictionToken is Ownable, IPredictionToken {
         uint48 subId,
         uint256 amount
     ) internal {
-        require(amount > 0, "Void amount");
         Account storage acc = _accounts[account];
 
         if (acc.accountType == AccountType.Super) {
@@ -574,16 +512,19 @@ contract PredictionToken is Ownable, IPredictionToken {
             require(subId < superAcc.subsCount, "Sub-account doesn't exist");
             SubAccount storage sub = superAcc.subs[subId];
             require(sub.balance >= amount, "Insufficient balance");
+
             sub.balance -= amount;
+            acc.balance -= amount;
+
             if (sub.balance == 0) {
-                // Reset parameters to default
                 sub.parameters = _parametersInit;
             }
-            acc.balance -= amount;
         } else {
             require(subId == 0, "Normal account cannot have subId > 0");
             require(acc.balance >= amount, "Insufficient balance");
+
             acc.balance -= amount;
+
             if (acc.balance == 0) {
                 acc.parameters = _parametersInit;
             }
@@ -594,13 +535,67 @@ contract PredictionToken is Ownable, IPredictionToken {
         emit Transfer(account, address(0), amount);
     }
 
-    // Engine management
-    function setEngine(address engine) external onlyOwner {
-        require(engine != address(0), "Zero engine address");
-        _engine = engine;
+    // ====== PARAMETRIC GETTERS ======
+
+    // Super account data
+    function accountType(address account) external view returns (AccountType) {
+        return _accounts[account].accountType;
     }
 
-    function setMaxRounds(uint64 maxRounds) external onlyEngine {
-        _maxRounds = maxRounds;
+    function subsCountOf(
+        address superAccount
+    ) external view onlySuper(superAccount) returns (uint48) {
+        return _supers[superAccount].subsCount;
+    }
+
+    // Parameters data
+    function paramConfig(
+        uint8 index
+    ) external view returns (bytes32, uint8, bool) {
+        return (
+            _paramConfig[index].name,
+            _paramConfig[index].decimals,
+            _paramConfig[index].isMutable
+        );
+    }
+
+    function parameterOf(
+        uint8 paramIndex,
+        address account,
+        uint48 subId
+    ) public view onlyValidSub(account, subId) returns (uint64) {
+        require(paramIndex < NUMBER_OF_PARAMETERS, "Invalid param index");
+        if (_accounts[account].accountType != AccountType.Super) {
+            return _accounts[account].parameters[paramIndex];
+        }
+        return _supers[account].subs[subId].parameters[paramIndex];
+    }
+
+    function anchor(
+        address account,
+        uint48 subId
+    ) public view onlyValidSub(account, subId) returns (uint64) {
+        return parameterOf(0, account, subId);
+    }
+
+    // Parametric balance
+    function parametricBalanceOf(
+        address account,
+        uint48 subId
+    ) external view onlyValidSub(account, subId) returns (uint256) {
+        if (_accounts[account].accountType == AccountType.Normal)
+            return _accounts[account].balance;
+        return _supers[account].subs[subId].balance;
+    }
+
+    // Parametric allowance
+    function allowanceForSub(
+        address account,
+        uint48 subId,
+        address spender
+    ) external view onlyValidSub(account, subId) returns (uint256, bool) {
+        Allowance storage al = _allowances[account][spender];
+        if (al.subId == subId) return (al.sub, al.oneOff);
+        return (al.total - al.sub, false);
     }
 }

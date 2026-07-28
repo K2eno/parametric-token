@@ -8,19 +8,32 @@ The standard is fully backward‑compatible with ERC‑20, ensuring seamless int
 
 ## **Motivation**
 
-Traditional ERC‑20 tokens treat every token as fungible and identical. However, many advanced use cases require tokens to carry extra information that evolves with their usage history or is tied to specific characteristics. For example:
+The parametric token standard is a primitive for the next generation of on‑chain finance: assets that carry state, liquidity that consolidates rather than fragments, and tokenomics engineered at the parameter level to meet the evolving demands of crypto markets.
 
-- **Prediction tokens** that represent a forecast price for an asset (e.g., “expected BTC price as of Aug 1, 2026 will be $76200”). Different tokens with different price predictions cannot be pooled in the same account without losing the distinct prediction data. Without a parametric standard, such markets are often split into separate binary option pools, fragmenting liquidity.
-- **Velocity‑first** tokens where the token’s “age” (time since mint) determines its redemption fee (e.g., longer‑held tokens incur higher fees). The age must be tracked per user balance and updated on every transfer using a weighted average.
-- **Tokenized positions** that carry immutable attributes like asset class (BTC, ETH, gold) and resolution time; tokens with different attributes must never be mixed in the same account.
-- **Gaming or loyalty tokens** that accrue “experience” or “level” as they are held, with the parameter affecting redemption rewards.
+Prediction markets are among the fastest‑growing sectors in crypto, reaching $44.8 billion in monthly volume by June 2026. Yet asset price predictions - one of the most important segments - remain largely binary: users bet yes/no on an event. This fragments liquidity across discrete outcome pools and distorts the prediction itself. The entire price range is divided into layers, each with its own pool, forcing users to select from preset buckets rather than simply quoting an expected price. The result is illiquid markets that degrade trading interest to ultra-short-term, low-confidence predictions. Parametric tokens enable **scalar predictions**: continuous price forecasts (e.g., “BTC will be $76,200 on Aug 1”) traded in a single pool. The prediction is the parameter; the token handles the rest.
 
-The Parametric Token standard solves these challenges by:
+RWA tokenization grew 589% in 2026 to over $33 billion, but tokenized assets are still largely static. They don’t carry usage history or adapt to holder behaviour. Parametric tokens bring **statefulness** to fungible assets.
 
-- **Consolidating liquidity**: Tokens with different parameters can trade in the same pool because the token contract itself manages the parameter logic, eliminating the need to create separate pools per parameter value.
-- **Enabling velocity‑first economics**: By tracking mint time, tokens can incentivise higher turnover through progressive fees.
-- **Simplifying user experience**: Sub‑accounts allow a single address to hold tokens with different parameters, avoiding the need for multiple wallets.
-- **Providing fine‑grained permission control**: Sub‑account‑specific allowances with one‑off option give users precise control over delegated spending, especially useful in protected (encapsulated) token systems where an engine contract manages minting, burning, and liquidity operations.
+The recent wave of DeFi exploits has pushed governance to the forefront of industry attention. A recurring weakness has emerged: ERC‑20 tokens create weak incentives for long‑term loyalty. Balance‑based voting power ignores holding history, enabling rapid accumulation and disposal of influence. **Tenure-based** voting and reward mechanisms address this directly.
+
+### **Liquidity consolidation**
+
+Tokens with different mutable parameters (e.g., price predictions) can trade in the same environment because the contract manages parameter logic and allows tokens to merge in the same account. No need to split markets into separate pools per parameter value. This capability is unique to the parametric model.
+
+### **Velocity control**
+
+Parameters allow deliberate control of token turnover:
+
+- **Utility‑bearing tokens** (hedging instruments, access passes) benefit from higher velocity. Progressive age‑based fees stimulate higher turnover: users who no longer need the utility sell the token to avoid extra costs.
+- **Yield‑bearing tokens** (staking, governance, credentials, RWAs) benefit from user loyalty (i.e. lower velocity). Progressive age‑based rewards incentivise long‑term holding. Age‑weighted rewards or voting power align incentives with genuine commitment.
+
+### **Advanced derivatives**
+
+The Bundle construct (convex portfolio of WBTC and its inverse) demonstrates how parametric tokens enable sophisticated synthetic instruments out‑of‑the‑box, with robust, abuse-resistant mechanics. Token‑controlled parameters allow institutions to launch new derivative types, including RWA extensions.
+
+### **UX simplification**
+
+Sub‑accounts let users hold multiple parameter variants in a single address – no need for multiple wallets. Fine‑grained permissions (sub‑account‑specific, one‑off allowances) give precise control over delegated spending.
 
 ## **Specification**
 
@@ -45,7 +58,7 @@ Every compliant Parametric Token MUST implement the following interface, in addi
 // SPDX-License-Identifier: MIT`
 pragma solidity ^0.8.30;
 
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**`
  * @title IParametricToken
@@ -136,17 +149,73 @@ interface IParametricToken is IERC20 {
 The token contract MUST define:
 
 - `NUMBER_OF_PARAMETERS` – a constant `uint8` indicating the total number of parameters.
-- A parameter configuration struct (RECOMMENDED to be exposed via a public array or getter):
+- A parameter configuration struct (see below in Data Model section; RECOMMENDED to be exposed via a public array or getter).
+
+The contract MUST implement `parameterOf(uint8 paramIndex, address account, uint48 subId) external view returns (uint64)` to return the current parameter value for a given account/sub‑account. For Normal accounts, `subId` MUST be `0`; for Super accounts, the caller MUST provide a valid `subId`.
+
+### **Data Model**
+
+Compliant implementations MUST maintain the following data structures to ensure consistent parameter tracking and sub‑account management.
 
 ```solidity
 struct ParamConfig {
-  bytes32 name; // human‑readable identifier (e.g., "mintTime", "price")
-  uint8 decimals; // number of decimals for display
-  bool isMutable; // true if mutable, false if immutable
+  bytes32 name; // Human‑readable identifier (e.g., "mintTime", "anchor")
+  uint8 decimals; // Number of decimals for display
+  bool isMutable; // True if parameter changes during transfers
+}
+
+struct Account {
+  AccountType accountType; // Normal or Super
+  uint256 balance; // Total balance across all sub‑accounts
+  uint64[NUMBER_OF_PARAMETERS] parameters; // Parameters for Normal accounts
+}
+
+struct SubAccount {
+  uint256 balance; // Balance of this sub‑account
+  uint64[NUMBER_OF_PARAMETERS] parameters; // Parameters for this sub‑account
+}
+
+struct SuperAccount {
+  SubAccount[] subs; // Array of sub‑accounts
+  uint48 subsCount; // Number of sub‑accounts
+}
+
+struct Allowance {
+  uint256 total; // Total allowance across all sub‑accounts
+  uint256 sub; // Allowance for subId
+  uint48 subId; // Sub‑account this allowance applies to
+  bool oneOff; // True if this is a one‑time allowance
 }
 ```
 
-The contract MUST implement `parameterOf(uint8 paramIndex, address account, uint48 subId) external view returns (uint64)` to return the current parameter value for a given account/sub‑account. For Normal accounts, `subId` MUST be `0`; for Super accounts, the caller MUST provide a valid `subId`.
+#### **Explanation**
+
+- ParamConfig defines each parameter's metadata (name, decimals, mutability).
+- Account stores the balance, accountType, and parameters for a Normal account.
+- SubAccount is identical to Account but used inside a SuperAccount.
+- SuperAccount holds an array of SubAccounts and a count.
+- Allowance extends ERC‑20 allowances with sub‑account specificity and one‑off flags.
+
+#### **Storage Mappings**
+
+The following mappings are REQUIRED:
+
+```solidity
+mapping(address => Account) private _accounts;
+mapping(address => SuperAccount) private _supers;
+mapping(address => mapping(address => Allowance)) private _allowances;
+```
+
+- `_accounts[address]` holds the account data (type, balance, parameters),
+- `_supers[address]` holds the sub‑account array if the account is Super,
+- `_allowances[owner][spender]` holds the allowance record.
+
+#### **Invariants**
+
+- If `_accounts[addr].accountType == AccountType.Normal`, then `_supers[addr].subsCount` MUST be 0,
+- If `_accounts[addr].accountType == AccountType.Super`, then `_supers[addr].subsCount > 0` and `_supers[addr].subs.length == _supers[addr].subsCount`,
+- `_accounts[addr].balance == sum(_supers[addr].subs[i].balance)` for Super accounts,
+- `_accounts[addr].balance` MUST equal `balanceOf(addr)`.
 
 ### **Account Types and Sub‑accounts**
 
@@ -306,6 +375,23 @@ One‑off allowances are useful for atomic operations where the spender should o
 
 `uint48` is enough to support an enormous number of sub‑accounts (over 2.8e14) while being storage‑efficient when packed with other fields.
 
+### **Relation to Existing Standards**
+
+Existing token standards define parameters or state at different levels, but none support **account‑specific**, **updatable parameters** while preserving full fungibility and ERC‑20 compatibility.
+
+| Standard                        | State / Parameter Location            | Fungibility                   |
+| ------------------------------- | ------------------------------------- | ----------------------------- |
+| **ERC‑20**                      | None (only balance)                   | ✅ Fungible                   |
+| **ERC‑721**                     | Per `tokenId` (metadata)              | ❌ Non‑fungible               |
+| **ERC‑1155**                    | Per `id` (token class)                | 🔶 Mixed (fungible per class) |
+| **ERC‑3525**                    | Per `slot` (token‑level container)    | 🔶 Mixed                      |
+| **ERC‑4626**                    | Global (vault‑level)                  | ✅ Fungible                   |
+| **EIP‑XXXX (Parametric Token)** | **Per account / sub‑account balance** | ✅ Fungible                   |
+
+In ERC‑1155, different parameter values require distinct `id`s, fragmenting liquidity into separate pools. ERC‑3525 introduces slots, but these are token‑level constructs that complicate standard ERC‑20 integration. ERC‑4626 parameters are global to the vault, not individualised per user.
+
+The Parametric Token standard fills this gap by attaching parameters **directly to the account** (or sub‑account), with deterministic mutation logic applied on mints/transfers, while remaining **fully compatible with ERC‑20** – enabling novel applications like scalar prediction markets, convex stablecoins, and tokens with velocity‑based economics without the limitations of existing standards.
+
 ## **Backwards Compatibility**
 
 - The standard is fully ERC‑20 compatible; all standard functions behave as expected.
@@ -352,12 +438,11 @@ CC0 1.0 Universal
 Please cite this document as:
 
 ```bibtex
-@article{
-EIP-ParametricToken,
-title={EIP-XXXX: Parametric Token Standard},
-author={Alexander Zvezdin},
-url={https://github.com/k2eno/eip-parametric-token},
-year={2026}
+@article{EIP-Parametric-Token,
+  title = {EIP-XXXX: Parametric Token Standard},
+  author = {Alexander Zvezdin},
+  url = {https://github.com/k2eno/eip-parametric-token/blob/main/EIPS/eip-xxxx.md},
+  year = {2026}
 }
 ```
 

@@ -2,17 +2,21 @@
 pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "../interfaces/IPredictionToken.sol";
 import "../interfaces/IPredictionEngine.sol";
 
 contract PredictionEngine is Ownable, IPredictionEngine {
-    // Constants
+    // ====== CONSTANTS ======
+
     uint256 public constant ROUND_POINTS = 1000e18; // 1000 USDT equivalent
     uint64 public constant MAX_ROUNDS = 5;
     uint64 public constant MIN_DIFF = 10e8;
-
     uint64 public constant ROUND_DURATION = 3600;
 
+    // ====== STRUCTS ======
+
+    // Prediction weights
     struct Weight {
         uint256 weight;
         bool claimed;
@@ -29,15 +33,15 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         mapping(address => uint256) pointsEarned;
     }
 
+    // ====== STATE ======
+
+    IPredictionToken private _token;
+
     uint64 private _startPrice;
     mapping(uint64 => RoundData) private _rounds;
 
-    IPredictionToken private _tokenContract;
+    // ====== MODIFIERS ======
 
-    // Events
-    // Defined in interface
-
-    // Modifiers
     modifier onlyValidForClosing(uint64 round) {
         require(round < MAX_ROUNDS, "Invalid round");
         require(
@@ -68,11 +72,12 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         _;
     }
 
-    // Constructor
-    constructor(address token, uint64 startPrice) Ownable(msg.sender) {
+    // ====== CONSTRUCTOR ======
+
+    constructor(address token, uint64 startPrice_) Ownable(msg.sender) {
         require(token != address(0), "Zero token");
-        _tokenContract = IPredictionToken(token);
-        _startPrice = startPrice;
+        _token = IPredictionToken(token);
+        _startPrice = startPrice_;
 
         uint64 startTime = uint64(
             (block.timestamp / ROUND_DURATION) * ROUND_DURATION
@@ -84,8 +89,10 @@ contract PredictionEngine is Ownable, IPredictionEngine {
     }
 
     function setupToken() external onlyOwner {
-        _tokenContract.setMaxRounds(MAX_ROUNDS);
+        _token.setMaxRounds(MAX_ROUNDS);
     }
+
+    // ====== FUNCTIONS ======
 
     // Admin functions
     function closeRound(
@@ -128,39 +135,41 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         RoundData storage data = _rounds[round];
 
         // Check that trader has positive balance in that sub-account for this round
-        uint256 balance = _tokenContract.parametricBalanceOf(trader, subId);
+        uint256 balance = _token.parametricBalanceOf(trader, subId);
         require(balance > 0, "Zero token balance");
         require(
             data.weights[trader][subId].weight == 0,
             "Token was already reported"
         );
         require(
-            _tokenContract.parameterOf(1, trader, subId) == round,
+            _token.parameterOf(1, trader, subId) == round,
             "Token has a different round"
         );
 
         // Get prediction price from token
-        uint64 predictionPrice = _tokenContract.parameterOf(0, trader, subId);
+        uint64 predictionPrice = _token.parameterOf(0, trader, subId);
 
         // Get asset price
-        uint256 assetPrice = data.assetPrice;
+        uint256 resolutionPrice = data.assetPrice;
 
         // Compute weight = range / |predictionPrice - assetPrice|
         uint256 diff =
-            predictionPrice > assetPrice
-                ? predictionPrice - assetPrice
-                : assetPrice - predictionPrice;
+            predictionPrice > resolutionPrice
+                ? predictionPrice - resolutionPrice
+                : resolutionPrice - predictionPrice;
         if (diff == 0) diff = MIN_DIFF;
 
-        uint256 weight = data.range / diff;
+        uint256 normalizedBalance =
+            _token.parametricBalanceOf(trader, subId) / 1e10;
+        uint256 w = (data.range * normalizedBalance) / diff;
 
         // Store weight for this trader/subId
-        data.weights[trader][subId].weight = weight;
-        data.totalWeight += weight;
+        data.weights[trader][subId].weight = w;
+        data.totalWeight += w;
 
-        _tokenContract.burn(trader, subId, balance);
+        _token.burn(trader, subId, balance);
 
-        emit TokenReportedAndBurned(trader, subId, round, balance, weight);
+        emit TokenReportedAndBurned(trader, subId, round, balance, w);
     }
 
     function claim(
@@ -169,19 +178,20 @@ contract PredictionEngine is Ownable, IPredictionEngine {
     ) external onlyValidForClosing(round) onlyClaiming(round) {
         address trader = msg.sender;
         require(!_rounds[round].weights[trader][subId].claimed);
-        uint256 pointsEarned =
+        uint256 points =
             (ROUND_POINTS * _rounds[round].weights[trader][subId].weight) /
                 _rounds[round].totalWeight;
         _rounds[round].weights[trader][subId].claimed = true;
-        _rounds[round].pointsEarned[trader] += pointsEarned;
-        emit PointsDistributed(trader, subId, round, pointsEarned);
+        _rounds[round].pointsEarned[trader] += points;
+        emit PointsDistributed(trader, subId, round, points);
     }
 
-    // Getters
-    function getStartPrice() external view returns (uint64) {
+    // ====== GETTERS ======
+
+    function startPrice() external view returns (uint64) {
         return _startPrice;
     }
-    function getWeight(
+    function weight(
         uint64 round,
         address account,
         uint48 subId
@@ -189,19 +199,19 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         return _rounds[round].weights[account][subId].weight;
     }
 
-    function getTotalWeight(uint64 round) external view returns (uint256) {
+    function totalWeight(uint64 round) external view returns (uint256) {
         return _rounds[round].totalWeight;
     }
 
-    function getAssetPrice(uint64 round) external view returns (uint64) {
+    function assetPrice(uint64 round) external view returns (uint64) {
         return _rounds[round].assetPrice;
     }
 
-    function getRoundStatus(uint64 round) external view returns (Status) {
+    function roundStatus(uint64 round) external view returns (Status) {
         return _rounds[round].status;
     }
 
-    function getPointsEarned(
+    function pointsEarned(
         uint64 round,
         address account
     ) external view returns (uint256) {

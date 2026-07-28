@@ -5,8 +5,8 @@ import "forge-std/Script.sol";
 import "forge-std/console.sol";
 import "forge-std/StdJson.sol";
 
-import "../src/implementations/PredictionToken.sol";
-import "../src/implementations/PredictionEngine.sol";
+import "../../src/prediction/PredictionToken.sol";
+import "../../src/prediction/PredictionEngine.sol";
 
 contract PredictionTrading is Script {
     uint256 constant ADMIN_PK =
@@ -33,7 +33,7 @@ contract PredictionTrading is Script {
         string memory root = vm.projectRoot();
         string memory path = string.concat(
             root,
-            "/out/deployed_addresses.json"
+            "/out/prediction_deployed_addresses.json"
         );
         string memory json = vm.readFile(path);
 
@@ -43,7 +43,6 @@ contract PredictionTrading is Script {
         token = PredictionToken(tokenAddr);
         engine = PredictionEngine(engineAddr);
 
-        // address admin = vm.addr(ADMIN_PK);
         trader1 = vm.addr(TRADER1_PK);
         trader2 = vm.addr(TRADER2_PK);
         trader3 = vm.addr(TRADER3_PK);
@@ -51,10 +50,7 @@ contract PredictionTrading is Script {
         console.log("Using Token at:", tokenAddr);
         console.log("Using Engine at:", engineAddr);
 
-        // ---------- Step 1: Warp to start time ----------
-        vm.roll(1);
-
-        // ---------- Step 2: Wallet4 (trader3) converts to Super and adds sub-accounts ----------
+        // trader3 converts his account to Super and adds sub-accounts
         _nextBlock();
         vm.broadcast(TRADER3_PK);
         token.convertToSuper(trader3);
@@ -72,10 +68,10 @@ contract PredictionTrading is Script {
             token.subsCountOf(trader3)
         );
 
-        // ---------- Step 3: Mint tokens with different predictions ----------
-        startPrice = engine.getStartPrice();
+        // Mint tokens with different predictions
+        startPrice = engine.startPrice();
 
-        // Mint for trader1: two mints (different predictions) – will average
+        // Mint for trader1 with different predictions
         uint64 price1 = _randomPrice(2000e8, 1);
         uint64 price2 = _randomPrice(3000e8, 2);
         uint256 amount = 1000e18; // 1000 tokens
@@ -88,7 +84,7 @@ contract PredictionTrading is Script {
             token.parameterOf(0, trader1, 0) / 1e8
         );
 
-        // Mint for trader2: two mints (different predictions)
+        // Mint for trader2 with different predictions
         uint64 price3 = _randomPrice(2000e8, 3);
         uint64 price4 = _randomPrice(3000e8, 4);
 
@@ -100,7 +96,7 @@ contract PredictionTrading is Script {
             token.parameterOf(0, trader2, 0) / 1e8
         );
 
-        // Mint for trader3 (wallet4) on sub0, sub1, sub2 with different predictions
+        // Mint for trader3 on sub0, sub1, sub2 with different predictions
         uint64 price5 = _randomPrice(4000e8, 5);
         uint64 price6 = _randomPrice(3000e8, 6);
         uint64 price7 = _randomPrice(2000e8, 7);
@@ -145,18 +141,18 @@ contract PredictionTrading is Script {
 
         console.log("Minting completed for all traders.");
 
-        // ---------- Step 4: Advance time past round end ----------
+        // Advance time past round resolution time
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + ROUND_DURATION + 1);
 
-        // ---------- Step 5: Admin closes round with a range ----------
+        // Admin closes round
         uint64 range = 2000e8;
         vm.broadcast(ADMIN_PK);
         engine.closeRound(ROUND, range);
 
-        console.log("Round closed, assetPrice set.");
+        console.log("Round closed, assetPrice set", engine.assetPrice(0) / 1e8);
 
-        // ---------- Step 6: Traders report (burn tokens) ----------
+        // Traders report (burn tokens) ----------
         _report(TRADER1_PK, 0, ROUND);
         _report(TRADER2_PK, 0, ROUND);
         _report(TRADER3_PK, 0, ROUND);
@@ -184,15 +180,15 @@ contract PredictionTrading is Script {
         // ---------- Step 9: Check points ----------
         console.log(
             "Trader1 points:",
-            engine.getPointsEarned(ROUND, trader1) / 1e18
+            engine.pointsEarned(ROUND, trader1) / 1e18
         );
         console.log(
             "Trader2 points:",
-            engine.getPointsEarned(ROUND, trader2) / 1e18
+            engine.pointsEarned(ROUND, trader2) / 1e18
         );
         console.log(
             "Trader3 points:",
-            engine.getPointsEarned(ROUND, trader3) / 1e18
+            engine.pointsEarned(ROUND, trader3) / 1e18
         );
 
         _mint(trader3, amount, price7, NEXT_ROUND);

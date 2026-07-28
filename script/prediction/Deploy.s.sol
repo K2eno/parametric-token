@@ -3,8 +3,9 @@ pragma solidity ^0.8.30;
 
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
-import "../src/implementations/PredictionToken.sol";
-import "../src/implementations/PredictionEngine.sol";
+
+import "../../src/prediction/PredictionToken.sol";
+import "../../src/prediction/PredictionEngine.sol";
 
 contract PredictionDeploy is Script {
     function run() external {
@@ -44,7 +45,10 @@ contract PredictionDeploy is Script {
         );
 
         vm.writeFile(
-            string.concat(vm.projectRoot(), "/out/deployed_addresses.json"),
+            string.concat(
+                vm.projectRoot(),
+                "/out/prediction_deployed_addresses.json"
+            ),
             json
         );
 
