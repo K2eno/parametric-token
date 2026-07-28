@@ -451,8 +451,8 @@ contract TenureToken is Ownable, ITenureToken {
 
         if (acc.accountType == AccountType.Super) {
             SuperAccount storage superAcc = _supers[account];
-            require(superAcc.subsCount > 0, "No sub-accounts");
             SubAccount storage sub0 = superAcc.subs[0];
+
             if (sub0.balance == 0) {
                 sub0.parameters[0] = _mintTime;
             } else {
@@ -495,13 +495,18 @@ contract TenureToken is Ownable, ITenureToken {
             SuperAccount storage superAcc = _supers[account];
             SubAccount storage sub = superAcc.subs[subId];
             require(sub.balance >= amount, "Insufficient balance");
+
             sub.balance -= amount;
+            acc.balance -= amount;
+
             if (sub.balance == 0) {
                 sub.parameters = _parametersInit;
             }
         } else {
             require(acc.balance >= amount, "Insufficient balance");
+
             acc.balance -= amount;
+
             if (acc.balance == 0) {
                 acc.parameters = _parametersInit;
             }
