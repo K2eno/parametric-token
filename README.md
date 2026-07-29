@@ -1,6 +1,6 @@
-# **Parametric Token Standard – EIP-XXXX Reference Implementation**
+# **Parametric Token Standard – ERC-XXXX Reference Implementation**
 
-This repository contains the reference implementation for the Parametric Token Standard (EIP-XXXX), a fully ERC‑20 compatible token standard that allows fungible tokens to carry account‑specific, mutable parameters.
+This repository contains the reference implementation for the Parametric Token Standard (ERC-XXXX), a fully ERC‑20 compatible token standard that allows fungible tokens to carry account‑specific, mutable parameters.
 
 ## **What is a Parametric Token?**
 
@@ -26,8 +26,8 @@ The standard addresses real‑world needs:
 
 ```text
 src/
-├── EIPS/
-│   └── eip-xxxx.md               # EIP proposal
+├── ERCS/
+│   └── erc-xxxx.md               # ERC draft
 ├── interfaces/
 │   └── IParametricToken.sol      # Core interface
 ├── libraries/
@@ -63,9 +63,9 @@ out/                                  # Build artifacts and deployed addresses
 └── prediction_deployed_addresses.json
 ```
 
-## **EIP Specification**
+## **ERC Specification**
 
-The full EIP specification is available in [`EIPS/eip-xxxx.md`](https://github.com/K2eno/eip-parametric-token/blob/main/EIPS/eip-xxxx.md). It covers:
+The full ERC specification is available in [`ERCS/erc-xxxx.md`](https://github.com/K2eno/parametric-token/blob/main/ERCS/erc-xxxx.md). It covers:
 
 - Interface and data model
 - Parameter semantics (mutable/immutable)
@@ -74,7 +74,7 @@ The full EIP specification is available in [`EIPS/eip-xxxx.md`](https://github.c
 - Security considerations
 - Rationale and comparison with existing standards (ERC‑20, ERC‑721, ERC‑1155, ERC‑3525, ERC‑4626).
 
-https://github.com/K2eno/eip-parametric-token/blob/main/EIPS/eip-xxxx.md
+https://github.com/K2eno/parametric-token/blob/main/ERCS/erc-xxxx.md
 
 ## **The Three Implementations**
 
@@ -147,7 +147,7 @@ function combine(
 ) external pure returns (uint64 newAnchor, uint256 newBalance);
 ```
 
-This emphasises their stateless, deterministic nature – they depend only on their inputs, never on contract state. This is a core requirement of the EIP for mutable parameter mutation functions.
+This emphasises their stateless, deterministic nature – they depend only on their inputs, never on contract state. This is a core requirement of the ERC for mutable parameter mutation functions.
 
 ## **Getting Started**
 
@@ -158,8 +158,8 @@ This emphasises their stateless, deterministic nature – they depend only on th
 ### **Installation**
 
 ```bash
-git clone https://github.com/k2eno/eip-parametric-token
-cd eip-parametric-token
+git clone https://github.com/k2eno/parametric-token
+cd parametric-token
 
 forge install
 ```
@@ -204,17 +204,20 @@ Use the same pattern for `bundle` and `tenure` contracts.
 
 ## **License**
 
-The EIP specification is CC0 1.0 Universal. The reference implementations are MIT.
+- Specification: Public domain via [CC0 1.0 Universal](LICENSE-CC0).
+- Code Implementations: [MIT License](LICENSE-MIT).
 
 ## **Citation**
 
-Please cite this document as:
+If you use this software or reference the Parametric Token Standard in an academic publication, please cite it as follows:
 
 ```bibtex
-@article{EIP-Parametric-Token-Readme,
-  title = {EIP-XXXX: Parametric Token Standard Readme},
-  author = {Alexander Zvezdin},
-  url = {https://github.com/k2eno/eip-parametric-token/blob/main/README.md},
-  year = {2026}
+@misc{zvezdin2026parametric,
+  author       = {Alexander Zvezdin},
+  title        = {ERC-XXXX: Parametric Token Standard},
+  year         = {2026},
+  publisher    = {GitHub},
+  journal      = {GitHub Repository},
+  howpublished = {\url{https://github.com/k2eno/parametric-token}}
 }
 ```

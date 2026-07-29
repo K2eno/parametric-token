@@ -1,4 +1,15 @@
-# **EIP-XXXX: Parametric Token Standard**
+---
+eip:
+title: Parametric Token
+description: An extension of ERC-20 enabling fungible tokens with account-specific mutable or immutable parameters and sub-accounts.
+author: Alexander Zvezdin (@k2eno)
+discussions-to:
+status: Draft
+type: Standards Track
+category: ERC
+created: 2026-07-24
+requires: 20
+---
 
 ## **Abstract**
 
@@ -379,14 +390,14 @@ One‑off allowances are useful for atomic operations where the spender should o
 
 Existing token standards define parameters or state at different levels, but none support **account‑specific**, **updatable parameters** while preserving full fungibility and ERC‑20 compatibility.
 
-| Standard                        | State / Parameter Location            | Fungibility                   |
-| ------------------------------- | ------------------------------------- | ----------------------------- |
-| **ERC‑20**                      | None (only balance)                   | ✅ Fungible                   |
-| **ERC‑721**                     | Per `tokenId` (metadata)              | ❌ Non‑fungible               |
-| **ERC‑1155**                    | Per `id` (token class)                | 🔶 Mixed (fungible per class) |
-| **ERC‑3525**                    | Per `slot` (token‑level container)    | 🔶 Mixed                      |
-| **ERC‑4626**                    | Global (vault‑level)                  | ✅ Fungible                   |
-| **EIP‑XXXX (Parametric Token)** | **Per account / sub‑account balance** | ✅ Fungible                   |
+| Standard                        | State / Parameter Location         | Fungibility                | Fungible Partition | Liquidity         |
+| ------------------------------- | ---------------------------------- | -------------------------- | ------------------ | ----------------- |
+| **ERC‑20**                      | None (only balance)                | ✅ Fungible                | ❌ None            | Consolidated      |
+| **ERC‑721**                     | Per `tokenId` (metadata)           | ❌ Non‑fungible            | ❌ None            | Highly fragmented |
+| **ERC‑1155**                    | Per `id` (token class)             | 🔶 Mixed                   | ❌ None            | Fragmented        |
+| **ERC‑3525**                    | Per `slot` (token‑level container) | 🔶 Mixed                   | ❌ None            | Highly fragmented |
+| **ERC‑4626**                    | Global (vault‑level)               | ✅ Fungible                | ❌ None            | Consolidated      |
+| **ERC‑XXXX (Parametric Token)** | **Per account / sub‑account**      | ✅ Conditional fungibility | ✅ Yes             | Consolidated      |
 
 In ERC‑1155, different parameter values require distinct `id`s, fragmenting liquidity into separate pools. ERC‑3525 introduces slots, but these are token‑level constructs that complicate standard ERC‑20 integration. ERC‑4626 parameters are global to the vault, not individualised per user.
 
@@ -398,6 +409,14 @@ The Parametric Token standard fills this gap by attaching parameters **directly 
 - Existing wallets and exchanges that only implement ERC‑20 will work with Parametric Tokens, seeing only the aggregate balance and total allowance.
 - Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations.
 - The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks), and the recommended implementation patterns mitigate them.
+
+## **Test Cases**
+
+Test cases have been provided in the implementation repo [here](https://github.com/K2eno/eip-parametric-token/blob/main/test).
+
+## **Reference Implementation**
+
+A sample repo demonstrating three implementations of this EIP has been created [here](https://github.com/K2eno/eip-parametric-token).
 
 ## **Security Considerations**
 
@@ -431,7 +450,7 @@ The reset logic (zeroing remaining sub and adjusting total) must be performed at
 
 ## **Copyright**
 
-CC0 1.0 Universal
+Copyright and related rights waived via [CC0-1.0](https://creativecommons.org).
 
 ## **Citation**
 
@@ -445,7 +464,3 @@ Please cite this document as:
   year = {2026}
 }
 ```
-
-Author: Alexander Zvezdin ([@k2eno](https://github.com/k2eno))  
-Status: Draft  
-Created: July 24, 2026
