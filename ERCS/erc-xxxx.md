@@ -388,20 +388,33 @@ One‑off allowances are useful for atomic operations where the spender should o
 
 ### **Relation to Existing Standards**
 
-Existing token standards define parameters or state at different levels, but none support **account‑specific**, **updatable parameters** while preserving full fungibility and ERC‑20 compatibility.
+Existing token standards define parameters or state at different levels, but none support **account‑specific**, **updatable parameters** while preserving fungibility and ERC‑20 compatibility.
 
-| Standard                        | State / Parameter Location         | Fungibility                | Fungible Partition | Liquidity         |
-| ------------------------------- | ---------------------------------- | -------------------------- | ------------------ | ----------------- |
-| **ERC‑20**                      | None (only balance)                | ✅ Fungible                | ❌ None            | Consolidated      |
-| **ERC‑721**                     | Per `tokenId` (metadata)           | ❌ Non‑fungible            | ❌ None            | Highly fragmented |
-| **ERC‑1155**                    | Per `id` (token class)             | 🔶 Mixed                   | ❌ None            | Fragmented        |
-| **ERC‑3525**                    | Per `slot` (token‑level container) | 🔶 Mixed                   | ❌ None            | Highly fragmented |
-| **ERC‑4626**                    | Global (vault‑level)               | ✅ Fungible                | ❌ None            | Consolidated      |
-| **ERC‑XXXX (Parametric Token)** | **Per account / sub‑account**      | ✅ Conditional fungibility | ✅ Yes             | Consolidated      |
+#### **Comparison: Fungibility and Liquidity**
+
+| Standard                        | State / Parameter Location         | Fungibility                | Liquidity         |
+| ------------------------------- | ---------------------------------- | -------------------------- | ----------------- |
+| **ERC‑20**                      | None (only balance)                | ✅ Fungible                | Consolidated      |
+| **ERC‑721**                     | Per `tokenId` (metadata)           | ❌ Non‑fungible            | Highly fragmented |
+| **ERC‑1155**                    | Per `id` (token class)             | 🔶 Mixed                   | Fragmented        |
+| **ERC‑3525**                    | Per `slot` (token‑level container) | 🔶 Mixed                   | Highly fragmented |
+| **ERC‑4626**                    | Global (vault‑level)               | ✅ Fungible                | Consolidated      |
+| **ERC‑XXXX (Parametric Token)** | **Per account / sub‑account**      | ✅ Conditional fungibility | Consolidated      |
 
 In ERC‑1155, different parameter values require distinct `id`s, fragmenting liquidity into separate pools. ERC‑3525 introduces slots, but these are token‑level constructs that complicate standard ERC‑20 integration. ERC‑4626 parameters are global to the vault, not individualised per user.
 
-The Parametric Token standard fills this gap by attaching parameters **directly to the account** (or sub‑account), with deterministic mutation logic applied on mints/transfers, while remaining **fully compatible with ERC‑20** – enabling novel applications like scalar prediction markets, convex stablecoins, and tokens with velocity‑based economics without the limitations of existing standards.
+#### **Comparison: Parameters Initialization, Mutability and Partitioning**
+
+| Standard                        | Initialization             | Transfer Mutability     | Fungible Partition |
+| ------------------------------- | -------------------------- | ----------------------- | ------------------ |
+| **ERC‑20**                      | ❌ None                    | ❌ None                 | ❌ None            |
+| **ERC‑721**                     | ✅ Minter-Defined          | ❌ None                 | ❌ None            |
+| **ERC‑1155**                    | ✅ Minter-Defined          | ❌ None                 | ❌ None            |
+| **ERC‑3525**                    | ✅ Minter-Defined          | ❌ None                 | ❌ None            |
+| **ERC‑4626**                    | 🔶 Auto (contract defined) | ❌ None                 | ❌ None            |
+| **ERC‑XXXX (Parametric Token)** | ✅ Minter-Defined OR Auto  | ✅ Auto (deterministic) | ✅ Yes             |
+
+The Parametric Token standard fills this gap by attaching parameters **directly to the account** (or sub‑account), with deterministic or user-defined parameters initialization at mint and strictly deterministic mutation logic applied on transfers, while remaining **fully compatible with ERC‑20**. This enables novel applications like scalar prediction markets, convex stablecoins, and tokens with velocity‑based economics without the limitations of existing standards.
 
 ## **Backwards Compatibility**
 
@@ -410,13 +423,9 @@ The Parametric Token standard fills this gap by attaching parameters **directly 
 - Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations.
 - The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks), and the recommended implementation patterns mitigate them.
 
-## **Test Cases**
-
-Test cases have been provided in the implementation repo [here](https://github.com/K2eno/eip-parametric-token/blob/main/test).
-
 ## **Reference Implementation**
 
-A sample repo demonstrating three implementations of this EIP has been created [here](https://github.com/K2eno/eip-parametric-token).
+A sample Foundry repo demonstrating three implementations of this ERC has been created [here](https://github.com/K2eno/parametric-token). It implements Prediction, Tenure and Bundle tokens with respective engines, supported by deploy and trading scenario scripts in /script.
 
 ## **Security Considerations**
 
@@ -457,10 +466,10 @@ Copyright and related rights waived via [CC0-1.0](https://creativecommons.org).
 Please cite this document as:
 
 ```bibtex
-@article{EIP-Parametric-Token,
-  title = {EIP-XXXX: Parametric Token Standard},
+@article{ERC-Parametric-Token,
+  title = {ERC-XXXX: Parametric Token Standard},
   author = {Alexander Zvezdin},
-  url = {https://github.com/k2eno/eip-parametric-token/blob/main/EIPS/eip-xxxx.md},
+  url = {https://github.com/k2eno/parametric-token/blob/main/ERCS/erc-xxxx.md},
   year = {2026}
 }
 ```

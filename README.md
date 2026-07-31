@@ -55,8 +55,6 @@ script/
     ├── Deploy.s.sol
     └── Trading.s.sol
 
-test/                                 # Foundry tests
-
 out/                                  # Build artifacts and deployed addresses
 └── bundle_deployed_addresses.json
 └── tenure_deployed_addresses.json
@@ -170,15 +168,9 @@ forge install
 forge build
 ```
 
-### **Run Tests**
+## **Scripts**
 
-```bash
-forge test
-```
-
-## **Deployment**
-
-Deployment scripts are provided for each implementation.
+Deployment and trading scenarios scripts are provided for each implementation.
 
 ### **Deploy**
 
@@ -195,6 +187,8 @@ After deployment, the contract addresses are saved to `out/prediction_deployed_a
 Use the same pattern for `bundle` and `tenure` contracts.
 
 ### **Run Trading Scripts**
+
+Use following command to run trading script for prediction contracts;
 
 ```bash
 forge script script/prediction/Trading.s.sol --broadcast --rpc-url http://localhost:8545 --slow --via-ir -vv
