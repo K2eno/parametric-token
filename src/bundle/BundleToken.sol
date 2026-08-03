@@ -228,8 +228,10 @@ contract BundleToken is Ownable, IParametricToken {
 
         Allowance storage al = _allowances[owner][spender];
         al.subId = ownerSubId;
-        al.sub = amount;
         al.oneOff = oneOff;
+        uint256 general = al.total - al.sub;
+        if (amount < al.sub) al.total = general + amount;
+        al.sub = amount;
         if (amount > al.total) al.total = amount;
 
         emit ApprovalForSub(owner, ownerSubId, spender, amount, oneOff);
@@ -542,10 +544,11 @@ contract BundleToken is Ownable, IParametricToken {
         return _accounts[account].accountType;
     }
 
-    function subsCountOf(
-        address superAccount
-    ) external view onlySuper(superAccount) returns (uint48) {
-        return _supers[superAccount].subsCount;
+    function subsCountOf(address account) external view returns (uint48) {
+        if (_accounts[account].accountType == AccountType.Super) {
+            return _supers[account].subsCount;
+        }
+        return 0;
     }
 
     // Parameters data
