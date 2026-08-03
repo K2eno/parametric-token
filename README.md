@@ -82,7 +82,7 @@ All Trading scripts use an admin and 3 trading accounts. Trader 3 converts its a
 
 ### **1\. Tenure – Age‑Based Economics Token**
 
-Concept: A token where the parameter is `mintTime` (timestamp of mint/last transfer). The engine awards progressive rewards on redemption that are proportional to the token's age.
+Concept: A token where the parameter is `mintTime` (timestamp of mint). The engine awards progressive rewards on redemption that are proportional to the token's age.
 
 - Parameter: `mintTime` (mutable, weighted average on transfer)
 - Mutation: `weightedAverage` – when two holdings merge, the new mint time is a weighted average of the two
