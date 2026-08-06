@@ -21,13 +21,9 @@ The standard is fully backward‑compatible with ERC‑20, ensuring seamless int
 
 The parametric token standard is a primitive for the next generation of ERC-20 compatible finance: assets that carry state, liquidity that consolidates rather than fragments, and tokenomics engineered at the parameter level to meet the evolving demands of crypto markets.
 
-Prediction markets have become one of the fastest-growing sectors in crypto, with substantial monthly trading volumes. Yet asset price predictions – one of the most important segments – remain largely binary: users bet yes or no on an event. This fragments liquidity across discrete outcome pools and distorts the prediction itself, forcing users to select from preset buckets rather than simply quoting an expected price. The result is illiquid markets that degrade trading interest to ultra-short-term, low-confidence predictions. Parametric tokens enable **scalar predictions**: continuous price forecasts (e.g., “BTC will be $76,200 on Aug 1”) traded in a single pool. The prediction is the parameter; the token handles the rest.
-
-RWA tokenization has grown rapidly to become a multi‑billion dollar sector, yet tokenized assets remain largely static. They don’t carry usage history or adapt to holder behaviour. Parametric tokens bring **statefulness** to fungible assets.
-
-The recent wave of DeFi exploits has pushed governance to the forefront of industry attention. A recurring weakness has emerged: ERC‑20 tokens create weak incentives for long‑term loyalty. Balance‑based voting power ignores holding history, enabling rapid accumulation and disposal of influence. **Tenure-based** voting and reward mechanisms address this directly.
-
 ### **Liquidity consolidation**
+
+Existing asset price predictions use multi-binary approach: users bet yes or no across discrete outcome pools, what fragments liquidity and distorts the prediction itself, forcing users to select from preset buckets rather than simply quoting an expected price.
 
 Tokens with different mutable parameters (e.g., price predictions) can trade in the same environment because the contract manages parameter logic and allows tokens to merge in the same account. No need to split markets into separate pools per parameter value. This capability is unique to the parametric model.
 
@@ -52,7 +48,7 @@ The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHALL”, “SHALL 
 
 ### **Definitions**
 
-- **Parameter**: An attribute associated with a token balance (account or sub‑account). Parameters are stored as `uint64` values (may represent timestamps, prices, or any numeric value). The token contract defines a fixed number of parameters via `NUMBER_OF_PARAMETERS`.
+- **Parameter**: An attribute associated with a non-zero token balance (account or sub‑account). Parameters are stored as `uint64` values (may represent timestamps, prices, or any numeric value). The token contract defines a fixed number of parameters via `NUMBER_OF_PARAMETERS`.
 - **Parameter Mutability**:
   - **Mutable**: The parameter value changes during token transfers according to token‑specific rules (e.g., weighted average, max operation). The token contract MUST implement the mutation logic inside its transfer functions.
   - **Immutable**: The parameter value never changes. Tokens with different immutable parameter values MUST NOT be allowed to coexist in the same account or sub‑account; the token contract SHALL revert any transfer that would cause such a conflict.
@@ -60,8 +56,12 @@ The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHALL”, “SHALL 
   - Normal: Holds a single balance and a single set of parameters.
   - Super: Holds multiple sub‑accounts, each with its own balance and parameters.
 - **Sub‑account**: A partition within a Super account, identified by a `uint48` index (starting from `0`). Sub‑account `0` is created automatically when an account is converted to Super.
+- **Zero‑Sum Transfer**: A default parametric transfer where the amount debited from the sender's balance MUST equal the amount credited to the recipient's balance (`debitAmount == creditAmount`).
+- **Non‑Zero‑Sum (NZS) Transfer**: A transfer of a parametric token where the amount debited from the sender's balance MAY not equal the amount credited to the recipient's balance (`debitAmount != creditAmount`) is qualified as non-zero-sum (NZS) transfer. NZS tokens MUST implement the optional `IParametricTokenNzs` interface.
 
 ### **Interface**
+
+#### **Main Interface**
 
 Every compliant Parametric Token MUST implement the following interface, in addition to the standard ERC‑20 interface (`IERC20`).
 
@@ -85,15 +85,58 @@ interface IParametricToken is IERC20 {
   }
 
   // Events
+
+  /**
+   * @notice Emitted when a Normal account is converted to a Super account.
+   * @dev This creates the default sub-account `0`, transferring the existing
+   *      balance and parameters to it. The account's type is permanently changed.
+   *      Can only be triggered by the account owner.
+   * @param account The address of the account that was converted to Super
+   */
   event AccountConvertedToSuper(address indexed account);
+
+  /**
+   * @notice Emitted when a new sub-account is created within a Super account.
+   * @dev The new sub-account is initialized with zero balance and default
+   *      parameters. Can only be triggered by the Super account owner.
+   * @param superAccount The address of the Super account that owns the new sub-account
+   * @param subId The index of the newly created sub-account
+   */
   event SubAccountCreated(address indexed superAccount, uint48 indexed subId);
+
+  /**
+   * @notice Emitted when a zero-sum parametric token transfer occurs.
+   * @dev The standard ERC-20 `Transfer` event MUST also be emitted using the `amount`.
+   *      This event SHOULD NOT be emitted for NZS token transfers, instead `ParametricTransferNzs`
+   *      SHALL be emitted.
+   * @param from The sender address
+   * @param fromSubId The sender's sub-account
+   * @param to The recipient address
+   * @param toSubId The recipient's sub-account
+   * @param amount The exact amount added to the recipient's balance
+   * @param toParams The full parameter array of the receiver AFTER parameters update
+   */
   event ParametricTransfer(
     address indexed from,
     uint48 indexed fromSubId,
     address indexed to,
     uint48 toSubId,
-    uint256 amount
+    uint256 amount,
+    uint64[] toParams
   );
+
+  /**
+   * @notice Emitted when a sub-account specific allowance is set or updated.
+   * @dev This allowance applies specifically to `subId`. If `oneOff` is `true`,
+   *      the allowance is consumed entirely after the first non-zero spend from
+   *      that sub-account. The general allowance (`total - sub`) is adjusted to
+   *      ensure `total >= sub`. Standard ERC-20 `Approval` events remain unaffected.
+   * @param owner The address of the token owner
+   * @param subId The sub-account for which the allowance is granted
+   * @param spender The address authorized to spend the tokens
+   * @param amount The specific allowance amount for the sub-account
+   * @param oneOff `true` if the allowance is one-time use
+   */
   event ApprovalForSub(
     address indexed owner,
     uint48 indexed subId,
@@ -245,6 +288,51 @@ interface IParametricToken is IERC20 {
 }
 ```
 
+#### **Optional Extension: Non‑Zero‑Sum (NZS) Transfers**
+
+NZS tokens (where in general case `debitAmount != creditAmount`) MUST implement the following optional interface to enable off‑chain indexers and wallets to accurately track balance deltas.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+import "./IParametricToken.sol";
+
+/**
+ * @title IParametricTokenNzs
+ * @dev Optional extension for Parametric Tokens that implement Non-Zero-Sum (NZS) transfers.
+ */
+interface IParametricTokenNzs is IParametricToken {
+  /**
+   * @notice Emitted when a non-zero-sum parametric token transfer occurs.
+   * @dev The standard ERC-20 `Transfer` event MUST also be emitted using the `creditAmount`.
+   *      The base `ParametricTransfer` event SHOULD NOT be emitted for NZS token transfers.
+   * @param from The sender address
+   * @param fromSubId The sender's sub-account
+   * @param to The recipient address
+   * @param toSubId The recipient's sub-account
+   * @param debitAmount The exact amount deducted from the sender's balance
+   * @param creditAmount The exact amount added to the recipient's balance
+   * @param fromParams The full parameter array of the sender BEFORE the debit
+   * @param toParams The full parameter array of the receiver AFTER the credit
+   */
+  event ParametricTransferNzs(
+    address indexed from,
+    uint48 indexed fromSubId,
+    address indexed to,
+    uint48 toSubId,
+    uint256 debitAmount,
+    uint256 creditAmount,
+    uint64[] fromParams,
+    uint64[] toParams
+  );
+}
+```
+
+#### **Interface Detection (ERC‑165)**
+
+Tokens implementing `IParametricTokenNzs` MUST support ERC‑165 and return `true` for the NZS interface identifier. Off‑chain indexers SHOULD use `supportsInterface(NZS_INTERFACE_ID)` to determine whether to listen to `ParametricTransferNzs` events. If `false`, they MUST rely on the base `ParametricTransfer` event (where `amount` represents both the debit and the credit).
+
 ### **Parameter Configuration**
 
 The token contract MUST define:
@@ -289,14 +377,6 @@ struct Allowance {
 }
 ```
 
-#### **Explanation**
-
-- ParamConfig defines each parameter's metadata (name, decimals, mutability).
-- Account stores the balance, accountType, and parameters for a Normal account.
-- SubAccount is identical to Account but used inside a SuperAccount.
-- SuperAccount holds an array of SubAccounts and a count.
-- Allowance extends ERC‑20 allowances with sub‑account specificity and one‑off flags.
-
 #### **Storage Mappings**
 
 The following mappings are REQUIRED:
@@ -337,17 +417,14 @@ mapping(address => mapping(address => Allowance)) private _allowances;
 #### Mutable Parameters
 
 - When tokens are transferred, the recipient’s mutable parameters MUST be updated according to token‑specific rules.
-- The token contract MUST implement the mutation logic inside its internal transfer functions. Examples of mutation rules:
-  - Weighted average (e.g., mintTime \= (oldMintTime \* oldBalance \+ incomingMintTime \* incomingAmount) / (oldBalance \+ incomingAmount)).
-  - Maximum (e.g., transferStep \= max(oldTransferStep, incomingTransferStep \+ 1)).
-  - Any custom logic as long as it is deterministic and gas‑efficient.
+- The token contract MUST implement the mutation logic inside its internal transfer functions (e.g. `weightedAverage`, `maximum` etc).
 - The mutation logic for each mutable parameter MUST be implemented as a **pure** function whose return value is computed deterministically from:
   - parameters of the source account,
   - parameters of the destination account,
   - the transfer value,
   - pre-transfer balance value of the destination account,
   - other state variables or deterministic blockchain parameters (e.g., `block.timestamp`, external price oracles).
-- When the balance of an account or sub‑account becomes zero, its parameters SHOULD be reset to a default initial value (e.g., `0` or `block.timestamp` at creation).
+- When the balance of an account or sub‑account becomes zero, its parameters MUST be reset to a default initial value (e.g., `0` or `block.timestamp` at creation).
 
 #### Resulting Balance
 
@@ -357,6 +434,21 @@ mapping(address => mapping(address => Allowance)) private _allowances;
   - the transfer value,
   - pre-transfer balance value of the destination account,
   - other state variables or deterministic blockchain parameters (e.g., `block.timestamp`, external price oracles).
+
+  **A. Zero‑Sum Transfers (Default)**
+
+  If token transfers imply that the computed `creditAmount` always equals the `debitAmount` (the amount deducted from the sender), the transfer is a standard zero‑sum transfer. The token MUST emit the base `ParametricTransfer` event.
+
+  **B. Non‑Zero‑Sum Transfers (NZS)**
+
+  If the computed `creditAmount` MAY differ from the `debitAmount` (i.e., `creditAmount != debitAmount`), the token transfer is qualified as a Non‑Zero‑Sum (NZS) transfer. In this case:
+
+  - The token MUST implement the `IParametricTokenNzs` optional extension.
+  - The token MUST emit the `ParametricTransferNzs` event with the exact `debitAmount`, `creditAmount`, and the **initial** parameter sender and **final** parameter receiver states.
+  - The token SHOULD NOT emit the base `ParametricTransfer` event to avoid ambiguous amount semantics.
+  - The token MUST still emit the standard ERC‑20 Transfer event (see ERC‑20 Compatibility below) using the `creditAmount`.
+
+  _Example_: See Bundle Token implementation for a NZS transfer sample.
 
 #### Parameter Initialization
 
@@ -387,7 +479,7 @@ struct Allowance {
 }
 ```
 
-The invariant `total >= sub` MUST be maintained, where `(total - sub)` represents the general allowance that can be spent from any sub‑account except the one identified by `subId`.
+The invariant `total >= sub` MUST be maintained, where `(total - sub)` represents the **general** allowance that can be spent from any sub‑account **except** the one identified by `subId`. If `total == 0` values of `sub`, `subId` and `oneOff` have to be set to `0`, `0` and `false` respectively.
 
 #### Standard ERC‑20 Approvals
 
@@ -425,15 +517,6 @@ The invariant `total >= sub` MUST be maintained, where `(total - sub)` represent
 - If the allowance is spent from a different `subId`, the `oneOff` flag is ignored (the allowance behaves as normal).
 - Standard `approve()` cannot set `oneOff`; calling it with `amount = 0` clears the flag.
 
-### **Required Internal Functions (Implementation Guidance)**
-
-The specification does not mandate a particular internal implementation, but to achieve the described semantics, implementations SHOULD include:
-
-- A function that updates mutable parameters during transfers (e.g., `_updateParametersBeforeExecution`).
-- A conflict check for immutable parameters (`_noParamsConflict`).
-- An internal function to spend sub‑account allowances (`_spendParametricAllowance`).
-- An internal function to verify sufficient allowance (`_sufficientAllowanceForSub`).
-
 ### **Sub‑account Validation**
 
 The standard defines a helper modifier (RECOMMENDED):
@@ -456,6 +539,7 @@ All standard ERC‑20 functions (`transfer`, `transferFrom`, `balanceOf`, `allow
 - `transferFrom(address from, address to, uint256 amount)` MUST spend allowance from the owner's sub‑account 0 and transfer to sub‑account 0 of the recipient.
 - `balanceOf(address account)` MUST return the total balance across all sub‑accounts for Super accounts, or the balance for Normal accounts.
 - `allowance(address owner, address spender)` MUST return `total` (the sum of all sub‑allowances).
+- For Non‑Zero‑Sum (NZS) tokens, the `amount` parameter of the standard `Transfer` event MUST equal the `creditAmount` (the amount credited to the recipient's balance).
 
 ## **Rationale**
 
@@ -478,6 +562,12 @@ One‑off allowances are useful for atomic operations where the spender should o
 ### **Why `uint48` for Sub‑account Index?**
 
 `uint48` is enough to support an enormous number of sub‑accounts (over 2.8e14) while being storage‑efficient when packed with other fields.
+
+### **Why Non‑Zero‑Sum Transfers?**
+
+Advanced financial instruments, such as tokenised convex portfolios (see Bundle Token example), might require that the value of a position is not a linear function of the underlying tokens. When two holdings with different parameter values (e.g., different `anchor` prices) are merged, the resulting position may have a different total balance than the simple arithmetic sum of the inputs due to the convexity of the payoff function.
+
+Providing an optional NZS extension allows the standard to support such sophisticated derivatives without forcing every parametric token to implement complex accounting logic. The extension gives indexers and wallets a clear, standardised way to detect and correctly track non‑linear balance updates, ensuring that off‑chain systems can accurately reflect on‑chain state.
 
 ### **Relation to Existing Standards**
 
@@ -542,6 +632,12 @@ Only the account owner can convert to Super or create sub‑accounts. However, o
 
 The mutation logic for mutable parameters must be carefully designed to avoid overflow or underflow. Since parameters are `uint64`, all arithmetic should be checked (or use Solidity’s built‑in overflow checks). The weighted average calculation, for example, should use `uint256` intermediate values to prevent overflow.
 
+### **Parameters Poisoning & Manipulation**
+
+In parametric tokens, an attacker may transfer tokens with unfavourable parameter values to degrade a victim's aggregate state (e.g., lowering a weighted-average prediction). Protection can be implemented via account-specific **inbound allowances** (pre-authorised parameter ranges) or **post-transfer validation** (reverting if resulting parameters fall outside bounds). These mechanisms preserve economic interest, as a parametric token's value is intrinsically bound to its parameter state.
+
+Flash-loan-based parameter manipulation is theoretically possible but economically deterred by the fundamental utility‑bearing nature of parametric tokens and the associated **utility vs reasonable cost** trade-off. Consequently, the cost of manipulation will generally exceed the extractable value.
+
 ### **Protection Against Unauthorised Engine Access**
 
 In encapsulated token systems (like the Inverse Token example), the engine contract may have special privileges. The standard does not mandate such a mechanism, but if implemented (e.g., via `onlyEngine` modifiers), the contract must ensure that the engine cannot bypass user approvals without explicit consent.
@@ -549,6 +645,10 @@ In encapsulated token systems (like the Inverse Token example), the engine contr
 ### **One‑off Allowance Reset**
 
 The reset logic (zeroing remaining sub and adjusting total) must be performed atomically within the same transaction to avoid race conditions. The implementation must not allow the allowance to be spent in two separate transactions after the first use.
+
+### **Non‑Zero‑Sum Transfer Accounting**
+
+Implementers of NZS transfers must be acutely aware that the `Transfer` event carries the `creditAmount`, not the `debitAmount`. Off‑chain systems that rely on deriving sender balances from `Transfer` events will compute an incorrect `balanceOf(from)` if they attempt to subtract the `creditAmount` from the sender. Implementers MUST document this behaviour prominently and off‑chain indexers MUST detect NZS tokens via ERC‑165 and subtract the `debitAmount` from `ParametricTransferNzs` event when updating the sender's balance. Failure to do so will result in persistent accounting mismatches.
 
 ## **Copyright**
 

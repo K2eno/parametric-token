@@ -6,7 +6,6 @@ import "./IParametricToken.sol";
 interface ITenureToken is IParametricToken {
     // ====== FUNCTIONS ======
 
-    function setEngine(address engine) external;
     function mint(address to, uint256 amount) external;
     function burn(address from, uint48 subId, uint256 amount) external;
 

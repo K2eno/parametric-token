@@ -157,7 +157,7 @@ contract PredictionEngine is Ownable, IPredictionEngine {
             predictionPrice > resolutionPrice
                 ? predictionPrice - resolutionPrice
                 : resolutionPrice - predictionPrice;
-        if (diff == 0) diff = MIN_DIFF;
+        if (diff < MIN_DIFF) diff = MIN_DIFF;
 
         uint256 normalizedBalance =
             _token.parametricBalanceOf(trader, subId) / 1e10;

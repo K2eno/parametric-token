@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import "./IParametricToken.sol";
+import "../interfaces/IParametricToken.sol";
 
 interface IPredictionToken is IParametricToken {
     // ====== FUNCTIONS ======
 
-    function setEngine(address engine) external;
     function setMaxRounds(uint64 maxRounds) external;
     function mint(
         address to,
@@ -14,7 +13,7 @@ interface IPredictionToken is IParametricToken {
         uint64 predictionPrice,
         uint64 round
     ) external;
-    function burn(address from, uint48 subId, uint256 amount) external;
+    function burn(address from, uint48 fromSubId, uint256 amount) external;
 
     // ====== GETTERS ======
 

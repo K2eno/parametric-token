@@ -19,15 +19,57 @@ interface IParametricToken is IERC20 {
 
     // ====== EVENTS ======
 
+    /**
+     * @notice Emitted when a Normal account is converted to a Super account.
+     * @dev This creates the default sub-account `0`, transferring the existing
+     *      balance and parameters to it. The account's type is permanently changed.
+     *      Can only be triggered by the account owner.
+     * @param account The address of the account that was converted to Super
+     */
     event AccountConvertedToSuper(address indexed account);
+
+    /**
+     * @notice Emitted when a new sub-account is created within a Super account.
+     * @dev The new sub-account is initialized with zero balance and default
+     *      parameters. Can only be triggered by the Super account owner.
+     * @param superAccount The address of the Super account that owns the new sub-account
+     * @param subId The index of the newly created sub-account
+     */
     event SubAccountCreated(address indexed superAccount, uint48 indexed subId);
+
+    /**
+     * @notice Emitted when a zero-sum parametric token transfer occurs.
+     * @dev The standard ERC-20 `Transfer` event MUST also be emitted using the `amount`.
+     *      This event SHOULD NOT be emitted for NZS token transfers, instead `ParametricTransferNzs`
+     *      SHALL be emitted.
+     * @param from The sender address
+     * @param fromSubId The sender's sub-account
+     * @param to The recipient address
+     * @param toSubId The recipient's sub-account
+     * @param amount The exact amount added to the recipient's balance
+     * @param toParams The full parameter array of the receiver AFTER parameters update
+     */
     event ParametricTransfer(
         address indexed from,
         uint48 indexed fromSubId,
         address indexed to,
         uint48 toSubId,
-        uint256 amount
+        uint256 amount,
+        uint64[] toParams
     );
+
+    /**
+     * @notice Emitted when a sub-account specific allowance is set or updated.
+     * @dev This allowance applies specifically to `subId`. If `oneOff` is `true`,
+     *      the allowance is consumed entirely after the first non-zero spend from
+     *      that sub-account. The general allowance (`total - sub`) is adjusted to
+     *      ensure `total >= sub`. Standard ERC-20 `Approval` events remain unaffected.
+     * @param owner The address of the token owner
+     * @param subId The sub-account for which the allowance is granted
+     * @param spender The address authorized to spend the tokens
+     * @param amount The specific allowance amount for the sub-account
+     * @param oneOff `true` if the allowance is one-time use
+     */
     event ApprovalForSub(
         address indexed owner,
         uint48 indexed subId,

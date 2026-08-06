@@ -125,6 +125,20 @@ Concept: A token representing a tokenized portfolio (bundle) of an underlying li
 
 Use case: Advanced derivatives engineering.
 
+## ⚠️ Scope & Disclaimer
+
+This repository is a **reference implementation** of the ERC-XXXX standard. Its sole purpose is to demonstrate the core parametric primitives—mutable/immutable parameters, sub‑account management, and deterministic mutation logic—in an executable, minimally complex form.
+
+To keep the focus on these novel mechanics, the `Prediction` and `Tenure` examples deliberately abstract away economic safeguards and security layers:
+
+- Minting is permissionless and does not require collateral (e.g., payment in a mock asset or stablecoin).
+- There are no supply caps, minting fees, or rate limits.
+- Rewards are issued as illustrative virtual `POINTS` to visualise the _outcome_ of holding a stateful token (e.g., deviation from a price or holding duration), not as a production‑ready incentive mechanism.
+
+In contrast, the `Bundle` example _does_ introduce mock `WBTC` and `INV` tokens because its core parametric feature — convex portfolio recombination — requires a meaningful underlying assets relationship to demonstrate the `combine` mutation logic.
+
+**When evaluating this standard, focus strictly on the on‑chain parameter semantics, sub‑account allowances, and transfer mutations.** The economic, game‑theoretic, and security safeguards (access controls, collateralisation, or pricing oracles) required for production deployments are out of scope for this demo and must be implemented by integrators based on their specific use cases.
+
 ## **Pure Functions in Libraries**
 
 All mutation logic is implemented as pure functions in `src/libraries/Lib.sol`:

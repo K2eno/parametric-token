@@ -3,15 +3,17 @@ pragma solidity ^0.8.30;
 
 library Lib {
     function weightedAverage(
-        uint64 param1,
-        uint256 amount1,
-        uint64 param2,
-        uint256 amount2
+        uint64 fromParam,
+        uint256 fromAmount,
+        uint64 toParam,
+        uint256 toAmount
     ) external pure returns (uint64) {
-        require(param1 > 0 && amount1 > 0, "Invalid values");
-        uint256 product = uint256(param1) * amount1 + uint256(param2) * amount2;
-        uint256 sum = amount1 + amount2;
-        return uint64(product / sum);
+        require(fromParam > 0 && fromAmount > 0, "Invalid values");
+        if (fromParam == toParam) return fromParam;
+        uint256 productSum =
+            uint256(fromParam) * fromAmount + uint256(toParam) * toAmount;
+        uint256 sum = fromAmount + toAmount;
+        return uint64(productSum / sum);
     }
 
     function combine(
