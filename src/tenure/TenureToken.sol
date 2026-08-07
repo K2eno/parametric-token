@@ -59,6 +59,28 @@ contract TenureToken is BaseParametricToken, ITenureToken {
 
     // ====== VIRTUAL HOOK IMPLEMENTATIONS ======
 
+    function _getParams(
+        address account,
+        uint48 subId
+    ) internal view override returns (uint64[] memory) {
+        uint64[] memory params = new uint64[](NUMBER_OF_PARAMETERS);
+        if (_accounts[account].accountType == AccountType.Super) {
+            params[0] = _subParams[account][subId][0];
+        } else {
+            params[0] = _normalParams[account][0];
+        }
+        return params;
+    }
+
+    function _decodeMintDataToArray(
+        bytes memory mintData
+    ) internal pure override returns (uint64[] memory) {
+        (uint64 decodedMintTime) = abi.decode(mintData, (uint64));
+        uint64[] memory params = new uint64[](1);
+        params[0] = decodedMintTime;
+        return params;
+    }
+
     function _updateTransferParametersAndComputeCredit(
         address from,
         uint48 fromSubId,
@@ -143,16 +165,17 @@ contract TenureToken is BaseParametricToken, ITenureToken {
         uint48 toSubId,
         uint256,
         uint256 creditAmount,
+        uint64[] memory,
+        uint64[] memory resultingParams,
         bool
     ) internal override {
-        uint64[] memory params = allParametersOf(to, toSubId);
         emit ParametricTransfer(
             from,
             fromSubId,
             to,
             toSubId,
             creditAmount,
-            params
+            resultingParams
         );
     }
 

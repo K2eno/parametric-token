@@ -21,8 +21,8 @@ interface IParametricTokenNzs is IParametricToken {
      * @param toSubId The recipient's sub-account
      * @param debitAmount The exact amount deducted from the sender's balance
      * @param creditAmount The exact amount added to the recipient's balance
-     * @param fromParams The full parameter array of the sender BEFORE the debit
-     * @param toParams The full parameter array of the receiver AFTER the credit
+     * @param incomingParams The full incoming parameter array
+     * @param resultingParams The full resulting parameter array
      */
     event ParametricTransferNzs(
         address indexed from,
@@ -31,7 +31,7 @@ interface IParametricTokenNzs is IParametricToken {
         uint48 toSubId,
         uint256 debitAmount,
         uint256 creditAmount,
-        uint64[] fromParams,
-        uint64[] toParams
+        uint64[] incomingParams,
+        uint64[] resultingParams
     );
 }

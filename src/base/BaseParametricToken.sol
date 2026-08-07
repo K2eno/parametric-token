@@ -362,6 +362,9 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         require(to != address(0), "ERC20: transfer to zero");
         require(amount > 0, "Void amount");
 
+        // Capture pre-debit sender params
+        uint64[] memory incomingParams = _getParams(from, fromSubId);
+
         // Self-transfer short-circuit
         if (from == to && fromSubId == toSubId) {
             // Emit events with current parameters (no change)
@@ -372,6 +375,8 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
                 toSubId,
                 amount,
                 amount,
+                incomingParams,
+                incomingParams,
                 true
             );
             emit Transfer(from, to, amount);
@@ -405,6 +410,9 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         }
         _accounts[to].balance += creditAmount;
 
+        // Capture post-credit receiver params
+        uint64[] memory resultingParams = _getParams(to, toSubId);
+
         // Emit events
         _emitParametricTransferEvent(
             from,
@@ -413,6 +421,8 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
             toSubId,
             amount,
             creditAmount,
+            incomingParams,
+            resultingParams,
             false
         );
         emit Transfer(from, to, creditAmount); // ERC-20 uses creditAmount
@@ -445,6 +455,11 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
 
         _totalSupply += creditAmount;
 
+        uint64[] memory mintParams = _decodeMintDataToArray(mintData);
+
+        // Capture post-credit receiver params
+        uint64[] memory resultingParams = _getParams(to, 0);
+
         _emitParametricTransferEvent(
             address(0),
             0,
@@ -452,6 +467,8 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
             0,
             amount,
             creditAmount,
+            mintParams,
+            resultingParams,
             false
         );
         emit Transfer(address(0), to, creditAmount);
@@ -459,25 +476,31 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
 
     function _burnInternal(
         address from,
-        uint48 subId,
+        uint48 fromSubId,
         uint256 amount
     ) internal {
         require(from != address(0), "Burn from zero");
         require(amount > 0, "Void amount");
 
+        // Capture pre-debit params
+        uint64[] memory initialParams = _getParams(from, fromSubId);
+
         // Delegate parameter updates (resets if balance becomes zero)
-        _applyBurnParameters(from, subId, amount);
+        _applyBurnParameters(from, fromSubId, amount);
 
         // Deduct from sender
         uint256 fromBalance;
         if (_accounts[from].accountType == AccountType.Super) {
             SuperAccountBase storage superAcc = _supers[from];
-            require(subId < superAcc.subsCount, "Sub-account doesn't exist");
-            fromBalance = superAcc.subs[subId].balance;
+            require(
+                fromSubId < superAcc.subsCount,
+                "Sub-account doesn't exist"
+            );
+            fromBalance = superAcc.subs[fromSubId].balance;
             require(fromBalance >= amount, "Insufficient balance");
-            superAcc.subs[subId].balance = fromBalance - amount;
+            superAcc.subs[fromSubId].balance = fromBalance - amount;
         } else {
-            require(subId == 0, "Normal account cannot have subId > 0");
+            require(fromSubId == 0, "Normal account cannot have subId > 0");
             fromBalance = _accounts[from].balance;
             require(fromBalance >= amount, "Insufficient balance");
         }
@@ -485,19 +508,36 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
 
         _totalSupply -= amount;
 
+        // Capture post-credit receiver params
+        uint64[] memory resultingParams = _getParams(from, fromSubId);
+
         _emitParametricTransferEvent(
             from,
-            subId,
+            fromSubId,
             address(0),
             0,
             amount,
             0,
+            initialParams,
+            resultingParams,
             false
         );
         emit Transfer(from, address(0), amount);
     }
 
     // ====== VIRTUAL HOOKS ======
+
+    /// @notice Hook returning current state of parameters.
+    function _getParams(
+        address account,
+        uint48 subId
+    ) internal view virtual returns (uint64[] memory);
+
+    /// @notice Converts mint parameters (bytes) into a uint64 array for event emission.
+    /// @dev Derived tokens MUST override this to decode their specific mint data.
+    function _decodeMintDataToArray(
+        bytes memory mintData
+    ) internal view virtual returns (uint64[] memory);
 
     /// @notice Hook to update parameters during a transfer.
     /// @return creditAmount The actual amount to credit to the receiver (may differ from `amount` for NZS).
@@ -541,6 +581,8 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         uint48 toSubId,
         uint256 debitAmount,
         uint256 creditAmount,
+        uint64[] memory incomingParams,
+        uint64[] memory resultingParams,
         bool isSelfTransfer
     ) internal virtual;
 }

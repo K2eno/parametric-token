@@ -102,6 +102,9 @@ contract TenureTrading is Script {
         transferAmount = sub0Bal / 3;
         _nextBlock();
         vm.broadcast(TRADER3_PK);
+        token.parametricTransfer(0, trader3, 0, sub0Bal);
+        _nextBlock();
+        vm.broadcast(TRADER3_PK);
         token.parametricTransfer(0, trader3, 2, transferAmount);
 
         console.log("Trader3 minted to sub0, transferred to sub1 and sub2.");

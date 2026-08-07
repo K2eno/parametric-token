@@ -76,6 +76,28 @@ contract BundleToken is BaseParametricToken, IBundleToken {
 
     // ====== VIRTUAL HOOK IMPLEMENTATIONS ======
 
+    function _getParams(
+        address account,
+        uint48 subId
+    ) internal view override returns (uint64[] memory) {
+        uint64[] memory params = new uint64[](NUMBER_OF_PARAMETERS);
+        if (_accounts[account].accountType == AccountType.Super) {
+            params[0] = _subParams[account][subId][0];
+        } else {
+            params[0] = _normalParams[account][0];
+        }
+        return params;
+    }
+
+    function _decodeMintDataToArray(
+        bytes memory mintData
+    ) internal pure override returns (uint64[] memory) {
+        (uint64 decodedAnchor) = abi.decode(mintData, (uint64));
+        uint64[] memory params = new uint64[](1);
+        params[0] = decodedAnchor;
+        return params;
+    }
+
     function _updateTransferParametersAndComputeCredit(
         address from,
         uint48 fromSubId,
@@ -181,11 +203,10 @@ contract BundleToken is BaseParametricToken, IBundleToken {
         uint48 toSubId,
         uint256 debitAmount,
         uint256 creditAmount,
+        uint64[] memory incomingParams,
+        uint64[] memory resultingParams,
         bool /* isSelfTransfer */
     ) internal override {
-        uint64[] memory fromParams = allParametersOf(from, fromSubId);
-        uint64[] memory toParams = allParametersOf(to, toSubId);
-
         emit ParametricTransferNzs(
             from,
             fromSubId,
@@ -193,8 +214,8 @@ contract BundleToken is BaseParametricToken, IBundleToken {
             toSubId,
             debitAmount,
             creditAmount,
-            fromParams,
-            toParams
+            incomingParams,
+            resultingParams
         );
     }
 

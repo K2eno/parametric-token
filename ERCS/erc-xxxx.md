@@ -53,8 +53,8 @@ The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHALL”, “SHALL 
   - **Mutable**: The parameter value changes during token transfers according to token‑specific rules (e.g., weighted average, max operation). The token contract MUST implement the mutation logic inside its transfer functions.
   - **Immutable**: The parameter value never changes. Tokens with different immutable parameter values MUST NOT be allowed to coexist in the same account or sub‑account; the token contract SHALL revert any transfer that would cause such a conflict.
 - **Account**: An Ethereum address that holds tokens. Accounts can be of two types:
-  - Normal: Holds a single balance and a single set of parameters.
-  - Super: Holds multiple sub‑accounts, each with its own balance and parameters.
+  - **Normal**: Holds a single balance and a single set of parameters.
+  - **Super**: Holds multiple sub‑accounts, each with its own balance and parameters.
 - **Sub‑account**: A partition within a Super account, identified by a `uint48` index (starting from `0`). Sub‑account `0` is created automatically when an account is converted to Super.
 - **Zero‑Sum Transfer**: A default parametric transfer where the amount debited from the sender's balance MUST equal the amount credited to the recipient's balance (`debitAmount == creditAmount`).
 - **Non‑Zero‑Sum (NZS) Transfer**: A transfer of a parametric token where the amount debited from the sender's balance MAY not equal the amount credited to the recipient's balance (`debitAmount != creditAmount`) is qualified as non-zero-sum (NZS) transfer. NZS tokens MUST implement the optional `IParametricTokenNzs` interface.
@@ -114,7 +114,7 @@ interface IParametricToken is IERC20 {
    * @param to The recipient address
    * @param toSubId The recipient's sub-account
    * @param amount The exact amount added to the recipient's balance
-   * @param toParams The full parameter array of the receiver AFTER parameters update
+   * @param resultingParams The full parameter array of the receiver AFTER parameters update
    */
   event ParametricTransfer(
     address indexed from,
@@ -122,7 +122,7 @@ interface IParametricToken is IERC20 {
     address indexed to,
     uint48 toSubId,
     uint256 amount,
-    uint64[] toParams
+    uint64[] resultingParams
   );
 
   /**
@@ -313,8 +313,8 @@ interface IParametricTokenNzs is IParametricToken {
    * @param toSubId The recipient's sub-account
    * @param debitAmount The exact amount deducted from the sender's balance
    * @param creditAmount The exact amount added to the recipient's balance
-   * @param fromParams The full parameter array of the sender BEFORE the debit
-   * @param toParams The full parameter array of the receiver AFTER the credit
+   * @param incomingParams The full incoming parameter array
+   * @param resultingParams The full resulting parameter array
    */
   event ParametricTransferNzs(
     address indexed from,
@@ -323,8 +323,8 @@ interface IParametricTokenNzs is IParametricToken {
     uint48 toSubId,
     uint256 debitAmount,
     uint256 creditAmount,
-    uint64[] fromParams,
-    uint64[] toParams
+    uint64[] incomingParams,
+    uint64[] resultingParams
   );
 }
 ```
@@ -479,7 +479,7 @@ struct Allowance {
 }
 ```
 
-The invariant `total >= sub` MUST be maintained, where `(total - sub)` represents the **general** allowance that can be spent from any sub‑account **except** the one identified by `subId`. If `total == 0` values of `sub`, `subId` and `oneOff` have to be set to `0`, `0` and `false` respectively.
+The invariant `total >= sub` MUST be maintained, where `(total - sub)` represents the **general** allowance that can be spent from any sub‑account **except** the one identified by `subId`. If `total == 0` values of `sub`, `subId` and `oneOff` MUST be set to `0`, `0` and `false` respectively.
 
 #### Standard ERC‑20 Approvals
 
@@ -489,7 +489,7 @@ The invariant `total >= sub` MUST be maintained, where `(total - sub)` represent
 #### Sub‑account‑specific Approvals
 
 - `approveForSub(uint48 ownerSubId, address spender, uint256 amount, bool oneOff)`:
-  - Can only be called by the owner of a Super account.
+  - Can only be called by the owner and MUST apply only to a Super account.
   - MUST implement conservative allowance logic:
     - increase in sub-specific allowance MUST happen at the expense of general (total - sub) allowance.
     - reduction in sub-specific allowance MUST not change general (total - sub) allowance.
@@ -501,12 +501,13 @@ The invariant `total >= sub` MUST be maintained, where `(total - sub)` represent
 #### Spending Allowances
 
 - `transferFrom(address from, address to, uint256 amount)` – standard ERC‑20 transfer:
-  - MUST spend from sub‑account `0` of `from` (default sub‑account for ERC‑20 compatibility).
-  - For Normal accounts, deducts from `total`.
-  - For Super accounts, calls the internal `_spendParametricAllowance(from, spender, 0, amount)`.
+  - For Normal and Super accounts: MUST spend from **general** allowance (`total`), `sub` stays unchanged (`sub = 0`, `subId = 0` for Normal account).
 - `parametricTransferFrom(...)` – parametric transfer with specified `fromSubId`:
-  - Checks sufficient allowance via `_sufficientAllowanceForSub`.
-  - Deducts allowance via `_spendParametricAllowance`.
+  - For Normal accounts: MUST spend from **general** allowance (`total`) of `from`, `sub` stays unchanged (`sub = 0`, `subId = 0`).
+  - For Super accounts: spending depends on whether the value `fromSubId` equals `subId` in allowance record
+    - `if (fromSubId != subId)`: MUST spend from **general** allowance (`total - sub`) of `from`. `total` amount MUST be reduced, `sub` is not affected.
+    - `if (fromSubId == subId)`: MUST spend from **sub-account specific** allowance (`sub`) of `from`. `total` amount MUST be reduced to keep **general** allowance (`total - sub`) unchanged.
+- In all cases insufficient allowance MUST trigger revert.
 
 #### One‑off Allowance Behavior
 

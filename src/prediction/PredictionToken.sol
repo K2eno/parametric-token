@@ -92,6 +92,34 @@ contract PredictionToken is BaseParametricToken, IPredictionToken {
 
     // ====== INTERNAL HOOKS ======
 
+    function _getParams(
+        address account,
+        uint48 subId
+    ) internal view override returns (uint64[] memory) {
+        uint64[] memory params = new uint64[](NUMBER_OF_PARAMETERS);
+        if (_accounts[account].accountType == AccountType.Super) {
+            params[0] = _subParams[account][subId][0];
+            params[1] = _subParams[account][subId][1];
+        } else {
+            params[0] = _normalParams[account][0];
+            params[1] = _normalParams[account][1];
+        }
+        return params;
+    }
+
+    function _decodeMintDataToArray(
+        bytes memory mintData
+    ) internal pure override returns (uint64[] memory) {
+        (uint64 decodedPrediction, uint64 decodedRound) = abi.decode(
+            mintData,
+            (uint64, uint64)
+        );
+        uint64[] memory params = new uint64[](2);
+        params[0] = decodedPrediction;
+        params[1] = decodedRound;
+        return params;
+    }
+
     function _updateTransferParametersAndComputeCredit(
         address from,
         uint48 fromSubId,
@@ -211,17 +239,18 @@ contract PredictionToken is BaseParametricToken, IPredictionToken {
         uint48 toSubId,
         uint256,
         uint256 creditAmount,
+        uint64[] memory,
+        uint64[] memory resultingParams,
         bool
     ) internal override {
         // For Prediction, debitAmount == creditAmount
-        uint64[] memory toParams = allParametersOf(to, toSubId);
         emit ParametricTransfer(
             from,
             fromSubId,
             to,
             toSubId,
             creditAmount,
-            toParams
+            resultingParams
         );
     }
 

@@ -47,7 +47,7 @@ interface IParametricToken is IERC20 {
      * @param to The recipient address
      * @param toSubId The recipient's sub-account
      * @param amount The exact amount added to the recipient's balance
-     * @param toParams The full parameter array of the receiver AFTER parameters update
+     * @param resultingParams The full resulting parameter array
      */
     event ParametricTransfer(
         address indexed from,
@@ -55,7 +55,7 @@ interface IParametricToken is IERC20 {
         address indexed to,
         uint48 toSubId,
         uint256 amount,
-        uint64[] toParams
+        uint64[] resultingParams
     );
 
     /**

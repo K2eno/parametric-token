@@ -28,6 +28,8 @@ The standard addresses real‑world needs:
 src/
 ├── ERCS/
 │   └── erc-xxxx.md               # ERC draft
+├── base/
+│   └── BaseParametricToken.sol   # Basis Parametric Token implementation (abstract)
 ├── interfaces/
 │   └── IParametricToken.sol      # Core interface
 ├── libraries/
@@ -72,11 +74,9 @@ The full ERC specification is available in [`ERCS/erc-xxxx.md`](https://github.c
 - Security considerations
 - Rationale and comparison with existing standards (ERC‑20, ERC‑721, ERC‑1155, ERC‑3525, ERC‑4626).
 
-https://github.com/K2eno/parametric-token/blob/main/ERCS/erc-xxxx.md
-
 ## **The Three Implementations**
 
-All implemetations consist of respective token and engine smart contracts, scripts include Deploy and Trading files.
+All implemetations use BaseParametricToken.sol abstract smart contract and consist of respective token and engine smart contracts. Scripts include Deploy and Trading files.
 
 All Trading scripts use an admin and 3 trading accounts. Trader 3 converts its account to Super account and executes transactions to/from/between sub-accounts.
 
