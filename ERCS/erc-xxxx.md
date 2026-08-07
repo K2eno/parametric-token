@@ -500,11 +500,13 @@ The invariant `total >= sub` MUST be maintained, where `(total - sub)` represent
 
 #### Spending Allowances
 
-- `transferFrom(address from, address to, uint256 amount)` – standard ERC‑20 transfer:
-  - For Normal and Super accounts: MUST spend from **general** allowance (`total`), `sub` stays unchanged (`sub = 0`, `subId = 0` for Normal account).
-- `parametricTransferFrom(...)` – parametric transfer with specified `fromSubId`:
-  - For Normal accounts: MUST spend from **general** allowance (`total`) of `from`, `sub` stays unchanged (`sub = 0`, `subId = 0`).
-  - For Super accounts: spending depends on whether the value `fromSubId` equals `subId` in allowance record
+- For Normal accounts (for both `transferFrom(address from, address to, uint256 amount)` and `parametricTransferFrom(...)`): MUST spend from **general** allowance (`total`), `sub` stays unchanged (`sub = 0`, `subId = 0`).
+- For Super accounts:
+  - `transferFrom(address from, address to, uint256 amount)`:
+    spending depends on whether `subId` in allowance record is equal `0`:
+    - `if (subId != 0)`: MUST spend from **general** allowance (`total - sub`) of `from`. `total` amount MUST be reduced, `sub` is not affected.
+    - `if (subId == 0)`: MUST spend from **sub-account specific** allowance (`sub`) of `from`. `total` amount MUST be reduced to keep **general** allowance (`total - sub`) unchanged.
+  - `parametricTransferFrom(...)`: spending depends on whether the value `fromSubId` equals `subId` in allowance record:
     - `if (fromSubId != subId)`: MUST spend from **general** allowance (`total - sub`) of `from`. `total` amount MUST be reduced, `sub` is not affected.
     - `if (fromSubId == subId)`: MUST spend from **sub-account specific** allowance (`sub`) of `from`. `total` amount MUST be reduced to keep **general** allowance (`total - sub`) unchanged.
 - In all cases insufficient allowance MUST trigger revert.
