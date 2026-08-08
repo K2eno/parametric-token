@@ -161,6 +161,18 @@ interface IParametricToken is IERC20 {
         address spender
     ) external view returns (uint256, bool);
 
+    /**
+     * @notice Returns sub-allowance settings for a given owner and spender
+     * @dev Returns (0, 0, false) for Normal accounts
+     * @param owner The address of the token owner
+     * @param spender The address of the spender
+     * @return (uint48, uint256, bool) The allowance subId, sub amount and whether it is one-off
+     */
+    function subAllowance(
+        address owner,
+        address spender
+    ) external view returns (uint48, uint256, bool);
+
     // Sub-account approval
 
     /**

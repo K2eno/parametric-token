@@ -226,6 +226,18 @@ interface IParametricToken is IERC20 {
     address spender
   ) external view returns (uint256, bool);
 
+  /**
+   * @notice Returns sub-allowance settings for a given owner and spender
+   * @dev Returns (0, 0, false) for Normal accounts
+   * @param owner The address of the token owner
+   * @param spender The address of the spender
+   * @return (uint48, uint256, bool) The allowance subId, sub amount and whether it is one-off
+   */
+  function subAllowance(
+    address owner,
+    address spender
+  ) external view returns (uint48, uint256, bool);
+
   // Sub-account approval
 
   /**
@@ -326,6 +338,11 @@ interface IParametricTokenNzs is IParametricToken {
     uint64[] incomingParams,
     uint64[] resultingParams
   );
+
+  // ====== FUNCTIONS ======
+
+  /// @notice Returns true if the token implements non‑zero‑sum transfers.
+  function isNonZeroSum() external pure returns (bool);
 }
 ```
 
@@ -526,7 +543,7 @@ The standard defines a helper modifier (RECOMMENDED):
 
 ```solidity
 modifier onlyValidSub(address account, uint48 subId) {
- if (subId > 0) require(_accounts[account].accountType == AccountType.Super, "Not a super account");
+ if (subId > 0) require(_accounts[account].accountType == AccountType.Super, "Not super account");
  if (subId > 0) require(subId < _supers[account].subsCount, "Sub-account doesn't exist");
  _;
 }
@@ -609,9 +626,19 @@ The Parametric Token standard fills this gap by attaching parameters **directly 
 - Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations.
 - The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks), and the recommended implementation patterns mitigate them.
 
+## **Tests**
+
+A comprehensive test suite for the reference implementation is available in the `/test` directory of the [Foundry repository](https://github.com/K2eno/parametric-token). It covers all core functionality, parameter semantics, sub‑account management, allowance mechanics, and revert conditions for the Prediction, Tenure, and Bundle token implementations. The tests are written using Foundry's testing framework and can be executed via:
+
+```bash
+forge test
+```
+
+Specific test files for each token are located at `test/prediction/Token.t.sol`, `test/tenure/Token.t.sol`, and `test/bundle/Token.t.sol`.
+
 ## **Reference Implementation**
 
-A sample Foundry repo demonstrating three implementations of this ERC has been created [here](https://github.com/K2eno/parametric-token). It implements Prediction, Tenure and Bundle tokens with respective engines, supported by deploy and trading scenario scripts in /script.
+Foundry repo [here](https://github.com/K2eno/parametric-token) includes scripts demonstrating three implementations of this ERC . It implements Prediction, Tenure and Bundle tokens with respective engines, supported by deploy and trading scenario scripts in `/script`.
 
 ## **Security Considerations**
 

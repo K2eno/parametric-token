@@ -57,7 +57,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
     modifier onlyNormal(address account) {
         require(
             _accounts[account].accountType == AccountType.Normal,
-            "Not normal"
+            "Not normal account"
         );
         _;
     }
@@ -65,7 +65,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
     modifier onlySuper(address account) {
         require(
             _accounts[account].accountType == AccountType.Super,
-            "Not super"
+            "Not super account"
         );
         _;
     }
@@ -74,7 +74,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         if (subId > 0) {
             require(
                 _accounts[account].accountType == AccountType.Super,
-                "Not a super account"
+                "Not super account"
             );
             require(
                 subId < _supers[account].subsCount,
@@ -173,6 +173,9 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         _supers[account].subs.push(SubAccountBase({balance: acc.balance}));
         _supers[account].subsCount = 1;
 
+        // Copy normal parameters to sub‑account 0
+        _copyAccountParametersToSub(account, 0);
+
         // Clear parameters (derived contract handles this via hook)
         _resetAccountParameters(account);
 
@@ -213,18 +216,21 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         address spender,
         uint256 amount,
         bool oneOff
-    ) external returns (bool) {
+    )
+        external
+        onlySuper(msg.sender)
+        onlyValidSub(msg.sender, ownerSubId)
+        returns (bool)
+    {
         address owner = msg.sender;
-        require(
-            _accounts[owner].accountType == AccountType.Super,
-            "Not super account"
-        );
-        require(
-            ownerSubId < _supers[owner].subsCount,
-            "Sub-account doesn't exist"
-        );
-        if (oneOff)
-            require(amount > 0, "OneOff requires positive sub allowance");
+        require(_supers[owner].subsCount > 1, "Single sub-account");
+        if (ownerSubId == 0) {
+            require(amount == 0, "SubId 0 requires zero amount");
+            require(oneOff == false, "SubId 0 requires false oneOff");
+        } else {
+            if (oneOff)
+                require(amount > 0, "OneOff requires positive sub allowance");
+        }
 
         Allowance storage al = _allowances[owner][spender];
         al.subId = ownerSubId;
@@ -238,13 +244,24 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         return true;
     }
 
+    function subAllowance(
+        address owner,
+        address spender
+    ) external view returns (uint48, uint256, bool) {
+        return (
+            _allowances[owner][spender].subId,
+            _allowances[owner][spender].sub,
+            _allowances[owner][spender].oneOff
+        );
+    }
+
     function allowanceForSub(
         address owner,
         uint48 subId,
         address spender
-    ) external view returns (uint256, bool) {
+    ) external view onlyValidSub(owner, subId) returns (uint256, bool) {
         Allowance storage al = _allowances[owner][spender];
-        if (al.subId == subId) return (al.sub, al.oneOff);
+        if (al.subId == subId && subId > 0) return (al.sub, al.oneOff);
         return (al.total - al.sub, false);
     }
 
@@ -302,7 +319,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         uint256 amount
     ) private view returns (bool) {
         Allowance storage al = _allowances[owner][spender];
-        if (fromSubId == al.subId) {
+        if (fromSubId == al.subId && fromSubId > 0) {
             return al.sub >= amount;
         } else {
             return al.total - al.sub >= amount;
@@ -319,7 +336,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         } else {
             uint256 current = _allowances[owner][spender].total;
             if (current != type(uint256).max) {
-                require(current >= value, "Insufficient allowance");
+                require(current >= value, "Insufficient general allowance");
                 _allowances[owner][spender].total = current - value;
             }
         }
@@ -332,7 +349,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         uint256 amount
     ) private {
         Allowance storage al = _allowances[owner][spender];
-        if (fromSubId == al.subId) {
+        if (fromSubId == al.subId && fromSubId > 0) {
             require(al.sub >= amount, "Insufficient sub-allowance");
             al.sub -= amount;
             al.total -= amount;
@@ -344,7 +361,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
             }
         } else {
             uint256 general = al.total - al.sub;
-            require(general >= amount, "Insufficient allowance");
+            require(general >= amount, "Insufficient general allowance");
             al.total -= amount;
         }
     }
@@ -393,16 +410,14 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
         );
 
         // Deduct from sender (always amount)
-        uint256 fromBalance;
         if (_accounts[from].accountType == AccountType.Super) {
-            fromBalance = _supers[from].subs[fromSubId].balance;
-            require(fromBalance >= amount, "Insufficient balance");
-            _supers[from].subs[fromSubId].balance = fromBalance - amount;
+            uint256 subBalance = _supers[from].subs[fromSubId].balance;
+            require(subBalance >= amount, "Insufficient balance");
+            _supers[from].subs[fromSubId].balance = subBalance - amount;
         } else {
-            fromBalance = _accounts[from].balance;
-            require(fromBalance >= amount, "Insufficient balance");
+            require(_accounts[from].balance >= amount, "Insufficient balance");
         }
-        _accounts[from].balance = fromBalance - amount;
+        _accounts[from].balance -= amount;
 
         // Add credit to receiver
         if (_accounts[to].accountType == AccountType.Super) {
@@ -527,6 +542,14 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
 
     // ====== VIRTUAL HOOKS ======
 
+    /// @notice Hook to copy normal account parameters into a new sub‑account.
+    /// @param account The account being converted to Super.
+    /// @param subId The sub‑account index (always 0 during conversion).
+    function _copyAccountParametersToSub(
+        address account,
+        uint48 subId
+    ) internal virtual {}
+
     /// @notice Hook returning current state of parameters.
     function _getParams(
         address account,
@@ -537,7 +560,7 @@ abstract contract BaseParametricToken is Ownable, IParametricToken {
     /// @dev Derived tokens MUST override this to decode their specific mint data.
     function _decodeMintDataToArray(
         bytes memory mintData
-    ) internal view virtual returns (uint64[] memory);
+    ) internal pure virtual returns (uint64[] memory);
 
     /// @notice Hook to update parameters during a transfer.
     /// @return creditAmount The actual amount to credit to the receiver (may differ from `amount` for NZS).

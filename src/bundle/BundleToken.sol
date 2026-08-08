@@ -9,11 +9,8 @@ contract BundleToken is BaseParametricToken, IBundleToken {
     // ====== CONSTANTS ======
 
     uint8 public constant NUMBER_OF_PARAMETERS = 1;
-    bytes4 public constant INTERFACE_ID_NZS = bytes4(
-        keccak256(
-            "ParametricTransferNzs(address,uint48,address,uint48,uint256,uint256,uint64[],uint64[])"
-        )
-    );
+    bytes4 public constant INTERFACE_ID_NZS = type(IParametricTokenNzs)
+        .interfaceId;
 
     // ====== STRUCTS ======
 
@@ -51,6 +48,10 @@ contract BundleToken is BaseParametricToken, IBundleToken {
             super.supportsInterface(interfaceId);
     }
 
+    function isNonZeroSum() external pure override returns (bool) {
+        return true;
+    }
+
     // ====== MINT & BURN ======
 
     function mint(
@@ -75,6 +76,13 @@ contract BundleToken is BaseParametricToken, IBundleToken {
     }
 
     // ====== VIRTUAL HOOK IMPLEMENTATIONS ======
+
+    function _copyAccountParametersToSub(
+        address account,
+        uint48 subId
+    ) internal override {
+        _subParams[account][subId][0] = _normalParams[account][0];
+    }
 
     function _getParams(
         address account,

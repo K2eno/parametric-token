@@ -34,4 +34,9 @@ interface IParametricTokenNzs is IParametricToken {
         uint64[] incomingParams,
         uint64[] resultingParams
     );
+
+    // ====== FUNCTIONS ======
+
+    /// @notice Returns true if the token implements non‑zero‑sum transfers.
+    function isNonZeroSum() external pure returns (bool);
 }

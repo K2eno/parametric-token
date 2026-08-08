@@ -211,6 +211,10 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         return _rounds[round].status;
     }
 
+    function roundResolutionTime(uint64 round) external view returns (uint64) {
+        return _rounds[round].resolutionTime;
+    }
+
     function pointsEarned(
         uint64 round,
         address account

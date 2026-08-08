@@ -59,6 +59,13 @@ contract TenureToken is BaseParametricToken, ITenureToken {
 
     // ====== VIRTUAL HOOK IMPLEMENTATIONS ======
 
+    function _copyAccountParametersToSub(
+        address account,
+        uint48 subId
+    ) internal override {
+        _subParams[account][subId][0] = _normalParams[account][0];
+    }
+
     function _getParams(
         address account,
         uint48 subId
