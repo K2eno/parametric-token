@@ -46,6 +46,14 @@ Sub‑accounts let users hold multiple parameter variants in a single address �
 
 The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHALL”, “SHALL NOT”, “SHOULD”, “SHOULD NOT”, “RECOMMENDED”, “MAY”, and “OPTIONAL” in this document are to be interpreted as described in RFC 2119\.
 
+### **⚠️ Core Design Principle: Separation of Ledger Accounting and Economic Value**
+
+The standard treats parameters as abstract, uninterpreted numerical structures (`uint64[]`). It is entirely agnostic to economic meaning, game-theoretic impacts, or market valuation. Its sole invariant is deterministic preservation, partitioning, and mutation of the parameter matrix.
+
+The reference implementations are minimally complex execution proofs that intentionally abstract away all production layers: minting is permissionless, rewards are illustrative, and economic safeguards (e.g., inbound allowances, collateralization, oracle cross-checks) are left to external controllers.
+
+Implementers **MUST** build their own security and economic perimeters on top of this standard.
+
 ### **Definitions**
 
 - **Parameter**: An attribute associated with a non-zero token balance (account or sub‑account). Parameters are stored as `uint64` values (may represent timestamps, prices, or any numeric value). The token contract defines a fixed number of parameters via `NUMBER_OF_PARAMETERS`.

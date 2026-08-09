@@ -39,23 +39,31 @@ src/
 ├── bundle/
 │   ├── BundleToken.sol           # Convex portfolio token
 │   └── BundleEngine.sol          # Engine managing deposits/redemptions
-├── tenure/
-│   ├── TenureToken.sol           # Age‑based token
-│   └── TenureEngine.sol          # Engine with progressive fees
-└── prediction/
-    ├── PredictionToken.sol       # Scalar prediction token
-    └── PredictionEngine.sol      # Engine with rounds and rewards
+├── prediction/
+│   ├── PredictionToken.sol       # Scalar prediction token
+|   └── PredictionEngine.sol      # Engine with rounds and rewards
+└── tenure/
+    ├── TenureToken.sol           # Age‑based token
+    └── TenureEngine.sol          # Engine with progressive rewards
 
 script/
 ├── bundle/
 │   ├── Deploy.s.sol
 │   └── Trading.s.sol
-├── tenure/
+├── prediction/
 │   ├── Deploy.s.sol
 │   └── Trading.s.sol
-└── prediction/
+└── tenure/
     ├── Deploy.s.sol
     └── Trading.s.sol
+
+test/
+├── bundle/
+│   └── Token.t.sol
+├── prediction/
+│   └── Token.t.sol
+└── tenure/
+    └── Token.t.sol
 
 out/                                  # Build artifacts and deployed addresses
 └── bundle_deployed_addresses.json
@@ -76,7 +84,7 @@ The full ERC specification is available in [`ERCS/erc-xxxx.md`](https://github.c
 
 ## **The Three Implementations**
 
-All implemetations use BaseParametricToken.sol abstract smart contract and consist of respective token and engine smart contracts. Scripts include Deploy and Trading files.
+All implemetations use `BaseParametricToken.sol` abstract smart contract and consist of respective token and engine smart contracts. Scripts include Deploy and Trading files.
 
 All Trading scripts use an admin and 3 trading accounts. Trader 3 converts its account to Super account and executes transactions to/from/between sub-accounts.
 
@@ -180,6 +188,12 @@ forge install
 
 ```bash
 forge build
+```
+
+## **Tests**
+
+```bash
+forge test
 ```
 
 ## **Scripts**
