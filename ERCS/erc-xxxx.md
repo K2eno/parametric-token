@@ -8,7 +8,7 @@ status: Draft
 type: Standards Track
 category: ERC
 created: 2026-07-24
-requires: 20
+requires: 20, 165
 ---
 
 ## **Abstract**
@@ -21,24 +21,24 @@ The standard is fully backward‑compatible with ERC‑20, ensuring seamless int
 
 The parametric token standard is a primitive for the next generation of ERC-20 compatible finance: assets that carry state, liquidity that consolidates rather than fragments, and tokenomics engineered at the parameter level to meet the evolving demands of crypto markets.
 
-### **Liquidity consolidation**
+### **Liquidity Consolidation**
 
-Existing asset price predictions use multi-binary approach: users bet yes or no across discrete outcome pools, what fragments liquidity and distorts the prediction itself, forcing users to select from preset buckets rather than simply quoting an expected price.
+Existing asset price predictions use a multi-binary approach: users bet yes or no across discrete outcome pools, which fragments liquidity and distorts the prediction itself, forcing users to select from preset buckets rather than simply quoting an expected price.
 
 Tokens with different mutable parameters (e.g., price predictions) can trade in the same environment because the contract manages parameter logic and allows tokens to merge in the same account. No need to split markets into separate pools per parameter value. This capability is unique to the parametric model.
 
-### **Velocity control**
+### **Velocity Control**
 
 Parameters allow deliberate control of token turnover:
 
 - **Utility‑bearing tokens** (hedging instruments, access passes) benefit from higher velocity. Progressive age‑based fees stimulate higher turnover: users who no longer need the utility sell the token to avoid extra costs.
 - **Yield‑bearing tokens** (staking, governance, credentials, RWAs) benefit from user loyalty (i.e. lower velocity). Progressive age‑based rewards incentivise long‑term holding. Age‑weighted rewards or voting power align incentives with genuine commitment.
 
-### **Advanced derivatives**
+### **Advanced Derivatives**
 
 The Bundle construct (convex portfolio of WBTC and its inverse) demonstrates how parametric tokens enable sophisticated synthetic instruments out‑of‑the‑box, with robust, abuse-resistant mechanics. Token‑controlled parameters allow institutions to launch new derivative types, including RWA extensions.
 
-### **UX simplification**
+### **UX Simplification**
 
 Sub‑accounts let users hold multiple parameter variants in a single address – no need for multiple wallets. Fine‑grained permissions (sub‑account‑specific, one‑off allowances) give precise control over delegated spending.
 
@@ -56,7 +56,7 @@ Implementers **MUST** build their own security and economic perimeters on top of
 
 ### **Definitions**
 
-- **Parameter**: An attribute associated with a non-zero token balance (account or sub‑account). Parameters are stored as `uint64` values (may represent timestamps, prices, or any numeric value). The token contract defines a fixed number of parameters via `NUMBER_OF_PARAMETERS`.
+- **Parameter**: An attribute associated with a **non-zero** token balance (account or sub‑account). Parameters are stored as `uint64` values (may represent timestamps, prices, or any numeric value). The token contract defines a fixed number of parameters via `NUMBER_OF_PARAMETERS`.
 - **Parameter Mutability**:
   - **Mutable**: The parameter value changes during token transfers according to token‑specific rules (e.g., weighted average, max operation). The token contract MUST implement the mutation logic inside its transfer functions.
   - **Immutable**: The parameter value never changes. Tokens with different immutable parameter values MUST NOT be allowed to coexist in the same account or sub‑account; the token contract SHALL revert any transfer that would cause such a conflict.
@@ -64,6 +64,8 @@ Implementers **MUST** build their own security and economic perimeters on top of
   - **Normal**: Holds a single balance and a single set of parameters.
   - **Super**: Holds multiple sub‑accounts, each with its own balance and parameters.
 - **Sub‑account**: A partition within a Super account, identified by a `uint48` index (starting from `0`). Sub‑account `0` is created automatically when an account is converted to Super.
+- **General Allowance**: The part of total allowance that can be spent from any sub‑account except the one identified by `subId` in allowance record. Represented by (`total - sub`) expression. For Normal accounts and Super accounts with a single sub‑account, this is the only usable allowance.
+- **Specific Allowance**: The part of total allowance that is restricted to a particular sub‑account identified by `subId` in allowance record. Represented by the `sub` field. Non-zero Specific allowances SHALL only apply to sub-accounts with `subId > 0`.
 - **Zero‑Sum Transfer**: A default parametric transfer where the amount debited from the sender's balance MUST equal the amount credited to the recipient's balance (`debitAmount == creditAmount`).
 - **Non‑Zero‑Sum (NZS) Transfer**: A transfer of a parametric token where the amount debited from the sender's balance MAY not equal the amount credited to the recipient's balance (`debitAmount != creditAmount`) is qualified as non-zero-sum (NZS) transfer. NZS tokens MUST implement the optional `IParametricTokenNzs` interface.
 
@@ -86,7 +88,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  *      each with its own parameters (e.g., mint time)
  */
 interface IParametricToken is IERC20 {
-  // Account types
+  // Constants
+
   enum AccountType {
     Normal,
     Super
@@ -152,6 +155,14 @@ interface IParametricToken is IERC20 {
     uint256 amount,
     bool oneOff
   );
+
+  // Account settings
+
+  /**
+   * @notice Returns the total number of parameters defined by this token.
+   * @dev MUST be a constant value.
+   */
+  function NUMBER_OF_PARAMETERS() external view returns (uint8);
 
   // Account management
 
@@ -219,7 +230,7 @@ interface IParametricToken is IERC20 {
   ) external view returns (uint64);
 
   /**
-   * @notice Returns the sub-account allowance for a given owner and spender
+   * @notice Returns allowance settings for a given subId, owner and spender
    * @dev If the stored subId matches the queried subId, returns the sub-specific
    *      allowance and its oneOff flag. Otherwise, returns the general allowance
    *      (total - sub) and `false` for oneOff
@@ -320,13 +331,15 @@ import "./IParametricToken.sol";
 
 /**
  * @title IParametricTokenNzs
- * @dev Optional extension for Parametric Tokens that implement Non-Zero-Sum (NZS) transfers.
+ * @dev Optional extension for Parametric Tokens that implement Non-Zero-Sum (NZS) transfers
  */
 interface IParametricTokenNzs is IParametricToken {
+  // Events
+
   /**
-   * @notice Emitted when a non-zero-sum parametric token transfer occurs.
+   * @notice Emitted when a non-zero-sum parametric token transfer occurs
    * @dev The standard ERC-20 `Transfer` event MUST also be emitted using the `creditAmount`.
-   *      The base `ParametricTransfer` event SHOULD NOT be emitted for NZS token transfers.
+   *      The base `ParametricTransfer` event SHOULD NOT be emitted for NZS token transfers
    * @param from The sender address
    * @param fromSubId The sender's sub-account
    * @param to The recipient address
@@ -347,7 +360,7 @@ interface IParametricTokenNzs is IParametricToken {
     uint64[] resultingParams
   );
 
-  // ====== FUNCTIONS ======
+  // Functions
 
   /// @notice Returns true if the token implements non‑zero‑sum transfers.
   function isNonZeroSum() external pure returns (bool);
@@ -362,10 +375,26 @@ Tokens implementing `IParametricTokenNzs` MUST support ERC‑165 and return `tru
 
 The token contract MUST define:
 
-- `NUMBER_OF_PARAMETERS` – a constant `uint8` indicating the total number of parameters.
+- `NUMBER_OF_PARAMETERS` – a **public** constant `uint8` indicating the total number of parameters.
 - A parameter configuration struct (see below in Data Model section; RECOMMENDED to be exposed via a public array or getter).
 
 The contract MUST implement `parameterOf(uint8 paramIndex, address account, uint48 subId) external view returns (uint64)` to return the current parameter value for a given account/sub‑account. For Normal accounts, `subId` MUST be `0`; for Super accounts, the caller MUST provide a valid `subId`.
+
+The following getter function is RECOMMENDED (especially for tokens with multiple parameters):
+
+```solidity
+/**
+ * @notice Returns all parameter values for a given account/sub-account as an array.
+ * @dev This is a convenience getter. The array length MUST equal NUMBER_OF_PARAMETERS.
+ * @param account The address of the account
+ * @param subId The sub-account index (0 for Normal accounts)
+ * @return uint64[] The full parameter array
+ */
+function allParametersOf(
+  address account,
+  uint48 subId
+) external view returns (uint64[] memory);
+```
 
 ### **Data Model**
 
@@ -489,7 +518,7 @@ Regardless of the mechanism, the token contract MUST NOT allow a mint operation 
 
 ### **Allowances and Approvals**
 
-The standard extends the ERC‑20 allowance system to support sub‑account‑specific allowances.
+The standard extends the ERC‑20 allowance system to support both **General Allowances** (usable across sub‑accounts) and **Specific Allowances** (restricted to a particular sub‑account).
 
 #### Data Structure
 
@@ -497,53 +526,81 @@ Each allowance record is represented by:
 
 ```solidity
 struct Allowance {
-  uint256 total; // total allowance for all sub‑accounts (sum of sub + general)
-  uint256 sub; // allowance specifically for the sub‑account identified by subId
-  uint48 subId; // which sub‑account the sub allowance applies to
-  bool oneOff; // if true, this sub‑allowance is consumed entirely after one use
+  uint256 total; // Total allowance for all sub‑accounts (general + specific)
+  uint256 sub; // Specific allowance for the sub‑account identified by subId
+  uint48 subId; // Sub‑account to which the specific allowance applies
+  bool oneOff; // If true, the specific allowance is consumed entirely after one use
 }
 ```
 
-The invariant `total >= sub` MUST be maintained, where `(total - sub)` represents the **general** allowance that can be spent from any sub‑account **except** the one identified by `subId`. If `total == 0` values of `sub`, `subId` and `oneOff` MUST be set to `0`, `0` and `false` respectively.
+#### Invariants:
+
+- `total >= sub` MUST always hold
+- `(total - sub)` represents the General Allowance available for any sub‑account **except** the one specified by `subId`.
+- Sub-account `0` (the default sub-account) MUST always use the General Allowance, even if the allowance record has `subId == 0`.
+- If `total == 0`, then `sub` MUST be `0`, `subId` MUST be `0`, and `oneOff` MUST be `false`.
+- If `subId == 0`, then `sub` MUST be `0`, and `oneOff` MUST be `false`.
+
+#### Normal Accounts and Super Accounts with a Single Sub‑account:
+
+- MUST NOT use Specific Allowances, only the General Allowance (`total`) is available for spending.
+- `subId` MUST be `0`, `sub` MUST be `0`, and `oneOff` MUST be `false`.
 
 #### Standard ERC‑20 Approvals
 
-- `approve(address spender, uint256 amount)` sets `total` to `amount`. If `sub` exceeds `amount`, it is capped to `amount`. If `amount` is `0`, the `oneOff` flag MUST be cleared.
-- This function does not affect `subId` or `oneOff` for non‑zero amounts.
+- `approve(address spender, uint256 amount)`:
+  - Sets `total` to `amount`.
+  - If `sub` exceeds `amount`, it is capped to `amount`.
+  - If `amount == 0`, then `subId` MUST be `0` and `oneOff` MUST be `false`.
+  - This function does **not** affect `subId` or `oneOff` for non‑zero amounts.
 
 #### Sub‑account‑specific Approvals
 
 - `approveForSub(uint48 ownerSubId, address spender, uint256 amount, bool oneOff)`:
-  - Can only be called by the owner and MUST apply only to a Super account.
+  - **Only callable** by the owner of a Super account with at least **two** sub-accounts (`subsCount > 1`).
+  - If `ownerSubId == 0`: `amount` MUST be `0` and `oneOff` MUST be `false`. Resulting state implies the account has no Specific Allowance.
+  - If `ownerSubId > 0`: if `oneOff == true`, `amount` MUST be `> 0`.
   - MUST implement conservative allowance logic:
-    - increase in sub-specific allowance MUST happen at the expense of general (total - sub) allowance.
-    - reduction in sub-specific allowance MUST not change general (total - sub) allowance.
-  - Sets `subId` to `ownerSubId`, `sub` to `amount`, and `oneOff` to the provided value.
-  - If `oneOff` is `true`, `amount` MUST be \> 0\.
+    - Sets `subId` to `ownerSubId`, `sub` to `amount`, and `oneOff` to the provided value.
+    - **increase** in sub-specific allowance MUST happen at the expense of General Allownce (`total - sub`).
+    - **reduction** in sub-specific allowance MUST not change General Allowance (`total - sub`).
   - If `amount > total`, `total` is raised to `amount` (maintaining `total >= sub`).
   - Emits `ApprovalForSub`.
 
 #### Spending Allowances
 
-- For Normal accounts (for both `transferFrom(address from, address to, uint256 amount)` and `parametricTransferFrom(...)`): MUST spend from **general** allowance (`total`), `sub` stays unchanged (`sub = 0`, `subId = 0`).
-- For Super accounts:
-  - `transferFrom(address from, address to, uint256 amount)`:
-    spending depends on whether `subId` in allowance record is equal `0`:
-    - `if (subId != 0)`: MUST spend from **general** allowance (`total - sub`) of `from`. `total` amount MUST be reduced, `sub` is not affected.
-    - `if (subId == 0)`: MUST spend from **sub-account specific** allowance (`sub`) of `from`. `total` amount MUST be reduced to keep **general** allowance (`total - sub`) unchanged.
-  - `parametricTransferFrom(...)`: spending depends on whether the value `fromSubId` equals `subId` in allowance record:
-    - `if (fromSubId != subId)`: MUST spend from **general** allowance (`total - sub`) of `from`. `total` amount MUST be reduced, `sub` is not affected.
-    - `if (fromSubId == subId)`: MUST spend from **sub-account specific** allowance (`sub`) of `from`. `total` amount MUST be reduced to keep **general** allowance (`total - sub`) unchanged.
-- In all cases insufficient allowance MUST trigger revert.
+#### **A. For Normal Accounts (any transfer)**
+
+- `transferFrom` and `parametricTransferFrom` MUST spend from General Allowance (`total`).
+
+#### **B. For Super Accounts:**
+
+- `transferFrom` (standard ERC‑20, uses `fromSubId = 0`):
+
+| Condition                                | Allowance Used          | Effect                             |
+| ---------------------------------------- | ----------------------- | ---------------------------------- |
+| `subId == 0` (no Specific Allowance)     | General (`total - sub`) | `total` decreases; `sub` unchanged |
+| `subId != 0` (Specific Allowance exists) | General (`total - sub`) | `total` decreases; `sub` unchanged |
+
+⚠️ `transferFrom` never spends from the Specific Allowance (even if `subId == 0`), because sub‑account `0` cannot have a Specific Allowance.
+
+- `parametricTransferFrom` (uses `fromSubId` from caller):
+
+| Condition                                | Allowance Used          | Effect                                                        |
+| ---------------------------------------- | ----------------------- | ------------------------------------------------------------- |
+| `fromSubId == subId` and `fromSubId > 0` | Specific (`sub`)        | `sub` and `total` decrease; general (`total - sub`) unchanged |
+| `fromSubId != subId` or `fromSubId == 0` | General (`total - sub`) | `total` decreases; `sub` unchanged                            |
+
+- In all cases, insufficient allowance MUST trigger a revert.
 
 #### One‑off Allowance Behavior
 
 - If `oneOff` is `true` and the allowance is spent using the exact `subId` stored in the allowance record:
-  - After the normal deduction (reducing `sub` and `total` by `amount`), the remaining `sub` allowance is zeroed and `total` is reduced by the remaining `sub`, so that the general allowance (`total - sub`) remains unchanged.
-  - The `oneOff` flag is set to `false`.
-  - The `subId` MAY remain unchanged.
-- If the allowance is spent from a different `subId`, the `oneOff` flag is ignored (the allowance behaves as normal).
-- Standard `approve()` cannot set `oneOff`; calling it with `amount = 0` clears the flag.
+  - `total` MUST be reduced by `sub`, `sub` MUST be set to `0`.
+  - The `oneOff` flag MUST be set to `false`.
+  - The `subId` MUST be set to `0`.
+- If the allowance is spent from a different `subId`, the `oneOff` flag is ignored.
+- Standard `approve()` cannot set `oneOff`; calling it with `amount == 0` clears the flag.
 
 ### **Sub‑account Validation**
 
@@ -629,24 +686,19 @@ The Parametric Token standard fills this gap by attaching parameters **directly 
 
 ## **Backwards Compatibility**
 
-- The standard is fully ERC‑20 compatible; all standard functions behave as expected.
+- This standard is fully ERC‑20 compatible; all standard functions behave as expected.
+  - Optional NZS extension requires usage of both `debitAmount` and `creditAmount` from `ParametricTransferNzs` event for proper balance updates.
 - Existing wallets and exchanges that only implement ERC‑20 will work with Parametric Tokens, seeing only the aggregate balance and total allowance.
-- Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations.
-- The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks), and the recommended implementation patterns mitigate them.
+- Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations, allowances implement conservative logic.
+- The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks) and the recommended implementation patterns mitigate them.
 
 ## **Tests**
 
-A comprehensive test suite for the reference implementation is available in the `/test` directory of the [Foundry repository](https://github.com/K2eno/parametric-token). It covers all core functionality, parameter semantics, sub‑account management, allowance mechanics, and revert conditions for the Prediction, Tenure, and Bundle token implementations. The tests are written using Foundry's testing framework and can be executed via:
-
-```bash
-forge test
-```
-
-Specific test files for each token are located at `test/prediction/Token.t.sol`, `test/tenure/Token.t.sol`, and `test/bundle/Token.t.sol`.
+A comprehensive test suite for the reference implementation is available in the `/test` directory of the [Foundry repository](https://github.com/K2eno/parametric-token). It covers all core functionality, parameter semantics, sub‑account management, allowance mechanics, and revert conditions for all implementations.
 
 ## **Reference Implementation**
 
-Foundry repo [here](https://github.com/K2eno/parametric-token) includes scripts demonstrating three implementations of this ERC . It implements Prediction, Tenure and Bundle tokens with respective engines, supported by deploy and trading scenario scripts in `/script`.
+[Foundry repository](https://github.com/K2eno/parametric-token) includes scripts in `/script` demonstrating three implementations of this ERC: Prediction, Tenure and Bundle tokens with respective engines - in all cases scripts cover deploy and trading scenarios.
 
 ## **Security Considerations**
 

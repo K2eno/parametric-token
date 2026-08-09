@@ -196,13 +196,15 @@ forge build
 forge test
 ```
 
+Specific test files for each token are located at `test/prediction/Token.t.sol`, `test/tenure/Token.t.sol`, and `test/bundle/Token.t.sol`.
+
 ## **Scripts**
 
 Deployment and trading scenarios scripts are provided for each implementation.
 
 ### **Deploy**
 
-Use following command to deploy prediction contracts;
+Use following command to deploy prediction contracts:
 
 ```bash
 export PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -216,7 +218,7 @@ Use the same pattern for `bundle` and `tenure` contracts.
 
 ### **Run Trading Scripts**
 
-Use following command to run trading script for prediction contracts;
+Use following command to run trading script for prediction contracts:
 
 ```bash
 forge script script/prediction/Trading.s.sol --broadcast --rpc-url http://localhost:8545 --slow --via-ir -vv

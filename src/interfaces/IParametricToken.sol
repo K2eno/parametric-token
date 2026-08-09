@@ -80,6 +80,14 @@ interface IParametricToken is IERC20 {
 
     // ====== FUNCTIONS ======
 
+    // Account settings
+
+    /**
+     * @notice Returns the total number of parameters defined by this token.
+     * @dev MUST be a constant value.
+     */
+    function NUMBER_OF_PARAMETERS() external view returns (uint8);
+
     // Account management
 
     /**
