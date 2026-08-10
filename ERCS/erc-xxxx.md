@@ -19,7 +19,7 @@ The standard is fully backward‑compatible with ERC‑20, ensuring seamless int
 
 ## Motivation
 
-The parametric token standard is a primitive for the next generation of ERC-20 compatible finance: assets that carry state, liquidity that consolidates rather than fragments, and tokenomics engineered at the parameter level to meet the evolving demands of crypto markets.
+The parametric token standard is a primitive for the next generation of ERC-20 compatible DeFi and agentic finance: assets that carry state, liquidity that consolidates rather than fragments, value that can be containerized, and tokenomics engineered at the parameter level to support both human and autonomous, self-improving value transfer.
 
 ### Liquidity Consolidation
 
@@ -37,6 +37,10 @@ Parameters allow deliberate control of token turnover:
 ### Advanced Derivatives
 
 The Bundle construct (convex portfolio of WBTC and its inverse) demonstrates how parametric tokens enable sophisticated synthetic instruments out‑of‑the‑box, with robust, abuse-resistant mechanics. Token‑controlled parameters allow institutions to launch new derivative types, including RWA extensions.
+
+### Agentic & Autonomous Systems
+
+Parametric tokens provide a secure evaluation and execution framework for autonomous agents. Agents implement logic, while parametric tokens serve as the rails - enabling agents to shape solutions, generate value, and channel it through the token's parameter topology on a competitive basis. Unlike static tokens, parametric tokens allow agents to keep track of these value flows, encoding strategy outcomes directly into the token state. The Bundle capability further extends this: agents can now containerize value, creating compound structures that represent complex strategies or aggregated positions. This aligns with the agentic economy's core principles—utility generation, capital efficiency, and just-in-time token usage—making parametric tokens an intrinsic enabler for the next generation of autonomous finance.
 
 ### UX Simplification
 
@@ -64,10 +68,12 @@ Implementers **MUST** build their own security and economic perimeters on top of
   - **Normal**: Holds a single balance and a single set of parameters.
   - **Super**: Holds multiple sub‑accounts, each with its own balance and parameters.
 - **Sub‑account**: A partition within a Super account, identified by a `uint48` index (starting from `0`). Sub‑account `0` is created automatically when an account is converted to Super.
-- **General Allowance**: The part of total allowance that can be spent from any sub‑account except the one identified by `subId` in allowance record. Represented by (`total - sub`) expression. For Normal accounts and Super accounts with a single sub‑account, this is the only usable allowance.
-- **Specific Allowance**: The part of total allowance that is restricted to a particular sub‑account identified by `subId` in allowance record. Represented by the `sub` field. Non-zero Specific allowances SHALL only apply to sub-accounts with `subId > 0`.
-- **Zero‑Sum Transfer**: A default parametric transfer where the amount debited from the sender's balance MUST equal the amount credited to the recipient's balance (`debitAmount == creditAmount`).
-- **Non‑Zero‑Sum (NZS) Transfer**: A transfer of a parametric token where the amount debited from the sender's balance MAY not equal the amount credited to the recipient's balance (`debitAmount != creditAmount`) is qualified as non-zero-sum (NZS) transfer. NZS tokens MUST implement the optional `IParametricTokenNzs` interface.
+- **Allowance**: Standard allowance is divided into two components:
+  - **General**: The part of total allowance that can be spent from any sub‑account except the one identified by `subId` in allowance record. Represented by (`total - sub`) expression. For Normal accounts and Super accounts with a single sub‑account, this is the only usable allowance.
+  - **Specific**: The part of total allowance that is restricted to a particular sub‑account identified by `subId` in allowance record. Represented by the `sub` field. Non-zero Specific allowances SHALL only apply to sub-accounts with `subId > 0`.
+- **Transfer**: Two types of transfers are considered:
+  - **Zero‑Sum**: A default parametric transfer where the amount debited from the sender's balance MUST equal the amount credited to the recipient's balance (`debitAmount == creditAmount`).
+  - **Non‑Zero‑Sum (NZS)**: A transfer of a parametric token where the amount debited from the sender's balance MAY not equal the amount credited to the recipient's balance (`debitAmount != creditAmount`) is qualified as non-zero-sum (NZS) transfer. NZS tokens MUST implement the optional `IParametricTokenNzs` interface.
 
 ### Interface
 
@@ -498,7 +504,7 @@ Regardless of the mechanism, the token contract MUST NOT allow a mint operation 
 
 ### Allowances and Approvals
 
-The standard extends the ERC‑20 allowance system to support both **General Allowances** (usable across sub‑accounts) and **Specific Allowances** (restricted to a particular sub‑account).
+The standard extends the ERC‑20 allowance system to support both **General** allowances (usable across sub‑accounts) and **Specific** allowances (restricted to a particular sub‑account).
 
 #### Data Structure
 
@@ -516,14 +522,14 @@ struct Allowance {
 #### Invariants
 
 - `total >= sub` MUST always hold
-- `(total - sub)` represents the General Allowance available for any sub‑account **except** the one specified by `subId`.
-- Sub-account `0` (the default sub-account) MUST always use the General Allowance, even if the allowance record has `subId == 0`.
+- `(total - sub)` represents the General allowance available for any sub‑account **except** the one specified by `subId`.
+- Sub-account `0` (the default sub-account) MUST always use the General allowance, even if the allowance record has `subId == 0`.
 - If `total == 0`, then `sub` MUST be `0`, `subId` MUST be `0`, and `oneOff` MUST be `false`.
 - If `subId == 0`, then `sub` MUST be `0`, and `oneOff` MUST be `false`.
 
 #### Normal Accounts and Super Accounts with a Single Sub‑account
 
-- MUST NOT use Specific Allowances, only the General Allowance (`total`) is available for spending.
+- MUST NOT use Specific allowances, only the General allowance (`total`) is available for spending.
 - `subId` MUST be `0`, `sub` MUST be `0`, and `oneOff` MUST be `false`.
 
 #### Standard ERC‑20 Approvals
@@ -538,12 +544,12 @@ struct Allowance {
 
 - `approveForSub(uint48 ownerSubId, address spender, uint256 amount, bool oneOff)`:
   - **Only callable** by the owner of a Super account with at least **two** sub-accounts (`subsCount > 1`).
-  - If `ownerSubId == 0`: `amount` MUST be `0` and `oneOff` MUST be `false`. Resulting state implies the account has no Specific Allowance.
+  - If `ownerSubId == 0`: `amount` MUST be `0` and `oneOff` MUST be `false`. Resulting state implies the account has no Specific allowance.
   - If `ownerSubId > 0`: if `oneOff == true`, `amount` MUST be `> 0`.
   - MUST implement conservative allowance logic:
     - Sets `subId` to `ownerSubId`, `sub` to `amount`, and `oneOff` to the provided value.
-    - **increase** in sub-specific allowance MUST happen at the expense of General Allownce (`total - sub`).
-    - **reduction** in sub-specific allowance MUST not change General Allowance (`total - sub`).
+    - **increase** in sub-specific allowance MUST happen at the expense of General allowance (`total - sub`).
+    - **reduction** in sub-specific allowance MUST not change General allowance (`total - sub`).
   - If `amount > total`, `total` is raised to `amount` (maintaining `total >= sub`).
   - Emits `ApprovalForSub`.
 
@@ -551,7 +557,7 @@ struct Allowance {
 
 #### A. For Normal Accounts (any transfer):
 
-- `transferFrom` and `parametricTransferFrom` MUST spend from General Allowance (`total`).
+- `transferFrom` and `parametricTransferFrom` MUST spend from General allowance (`total`).
 
 #### B. For Super Accounts:
 
@@ -559,10 +565,10 @@ struct Allowance {
 
 | Condition                                | Allowance Used          | Effect                             |
 | ---------------------------------------- | ----------------------- | ---------------------------------- |
-| `subId == 0` (no Specific Allowance)     | General (`total - sub`) | `total` decreases; `sub` unchanged |
-| `subId != 0` (Specific Allowance exists) | General (`total - sub`) | `total` decreases; `sub` unchanged |
+| `subId == 0` (no Specific allowance)     | General (`total - sub`) | `total` decreases; `sub` unchanged |
+| `subId != 0` (Specific allowance exists) | General (`total - sub`) | `total` decreases; `sub` unchanged |
 
-⚠️ `transferFrom` never spends from the Specific Allowance (even if `subId == 0`), because sub‑account `0` cannot have a Specific Allowance.
+⚠️ `transferFrom` never spends from the Specific allowance (even if `subId == 0`), because sub‑account `0` cannot have a Specific allowance.
 
 - `parametricTransferFrom` (uses `fromSubId` from caller):
 
@@ -628,9 +634,13 @@ One‑off allowances are useful for atomic operations where the spender should o
 
 `uint48` is enough to support an enormous number of sub‑accounts (over 2.8e14) while being storage‑efficient when packed with other fields.
 
+### Why Parametric Tokens Are Agentic‑Friendly?
+
+Deterministic pure‑function mutations, sub‑account isolation, and composable allowances make parametric tokens a natural fit for autonomous agents. Predictable (reproducible) state transitions, independent strategy management, and secure atomic workflows — the features agents need - are already built in.
+
 ### Why Non‑Zero‑Sum Transfers?
 
-Advanced financial instruments, such as tokenised convex portfolios (see Bundle Token example), might require that the value of a position is not a linear function of the underlying tokens. When two holdings with different parameter values (e.g., different `anchor` prices) are merged, the resulting position may have a different total balance than the simple arithmetic sum of the inputs due to the convexity of the payoff function.
+Advanced financial instruments, such as tokenized containers (see Bundle Token example), might require that the value of a position is not a linear function of the underlying tokens. When two holdings with different parameter values (e.g., different `anchor` prices) are merged, the resulting position may have a different total balance than the simple arithmetic sum of the inputs due to the convexity of the payoff function.
 
 Providing an optional NZS extension allows the standard to support such sophisticated derivatives without forcing every parametric token to implement complex accounting logic. The extension gives indexers and wallets a clear, standardised way to detect and correctly track non‑linear balance updates, ensuring that off‑chain systems can accurately reflect on‑chain state.
 
@@ -667,14 +677,14 @@ The Parametric Token standard fills this gap by attaching parameters **directly 
 ## Backwards Compatibility
 
 - This standard is fully ERC‑20 compatible; all standard functions behave as expected.
-  - Optional NZS extension requires usage of both `debitAmount` and `creditAmount` from `ParametricTransferNzs` event for proper balance updates.
+- Optional NZS extension requires usage of both `debitAmount` and `creditAmount` from `ParametricTransferNzs` event for proper balance updates.
 - Existing wallets and exchanges that only implement ERC‑20 will work with Parametric Tokens, seeing only the aggregate balance and total allowance.
 - Advanced features (sub‑accounts, parameters) are accessed via additional functions; they do not interfere with standard operations, allowances implement conservative logic.
 - The standard does not introduce any new security risks beyond those inherent in ERC‑20 (e.g., reentrancy, allowance attacks) and the recommended implementation patterns mitigate them.
 
 ## Test Cases
 
-A comprehensive test suite for the reference implementation is available in the `/test` directory of the [Foundry repository](https://github.com/K2eno/parametric-token). It covers all core functionality, parameter semantics, sub‑account management, allowance mechanics, and revert conditions for all implementations.
+A comprehensive test suite for the reference implementation is available in the `/test` directory of the [Foundry repository](https://github.com/K2eno/parametric-token). The suite includes over 100 unit tests covering all core functions, parameter mutation logic, sub‑account transitions, allowance spending, NZS mints/transfers and revert conditions for Normal and Super accounts.
 
 ## Reference Implementation
 
