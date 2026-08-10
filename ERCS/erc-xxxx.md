@@ -3,11 +3,11 @@ eip:
 title: Parametric Token
 description: An extension of ERC-20 enabling fungible tokens with account-specific mutable or immutable parameters and sub-accounts.
 author: Alexander Zvezdin (@k2eno)
-discussions-to:
+discussions-to: https://ethereum-magicians.org/t/erc-xxxx-parametric-token/29385
 status: Draft
 type: Standards Track
 category: ERC
-created: 2026-07-24
+created: 2026-08-10
 requires: 20, 165
 ---
 
