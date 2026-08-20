@@ -1,6 +1,6 @@
-# **Parametric Token Standard – ERC-XXXX Reference Implementation**
+# **Parametric Token Standard – ERC-8378 Reference Implementation**
 
-This repository contains the reference implementation for the Parametric Token Standard (ERC-XXXX), a fully ERC‑20 compatible token standard that allows fungible tokens to carry account‑specific, mutable parameters.
+This repository contains the reference implementation for the Parametric Token Standard (ERC-8378), a fully ERC‑20 compatible token standard that allows fungible tokens to carry account‑specific, mutable parameters.
 
 ## **What is a Parametric Token?**
 
@@ -27,7 +27,7 @@ The standard addresses real‑world needs:
 ```text
 src/
 ├── ERCS/
-│   └── erc-xxxx.md               # ERC draft
+│   └── erc-8378.md               # ERC draft
 ├── base/
 │   └── BaseParametricToken.sol   # Basis Parametric Token implementation (abstract)
 ├── interfaces/
@@ -73,7 +73,7 @@ out/                                  # Build artifacts and deployed addresses
 
 ## **ERC Specification**
 
-The full ERC specification is available in [`ERCS/erc-xxxx.md`](https://github.com/K2eno/parametric-token/blob/main/ERCS/erc-xxxx.md). It covers:
+The full ERC specification is available in [`ERCS/erc-8378.md`](https://github.com/K2eno/parametric-token/blob/main/ERCS/erc-8378.md). It covers:
 
 - Interface and data model
 - Parameter semantics (mutable/immutable)
@@ -135,7 +135,7 @@ Use case: Advanced derivatives engineering.
 
 ## ⚠️ Scope & Disclaimer
 
-This repository is a **reference implementation** of the ERC-XXXX standard. Its sole purpose is to demonstrate the core parametric primitives—mutable/immutable parameters, sub‑account management, and deterministic mutation logic—in an executable, minimally complex form.
+This repository is a **reference implementation** of the ERC-8378 standard. Its sole purpose is to demonstrate the core parametric primitives—mutable/immutable parameters, sub‑account management, and deterministic mutation logic—in an executable, minimally complex form.
 
 To keep the focus on these novel mechanics, the `Prediction` and `Tenure` examples deliberately abstract away economic safeguards and security layers:
 
@@ -238,7 +238,7 @@ If you use this software or reference the Parametric Token Standard in an academ
 ```bibtex
 @misc{zvezdin2026parametric,
   author       = {Alexander Zvezdin},
-  title        = {ERC-XXXX: Parametric Token Standard},
+  title        = {ERC-8378: Parametric Token Standard},
   year         = {2026},
   publisher    = {GitHub},
   journal      = {GitHub Repository},
