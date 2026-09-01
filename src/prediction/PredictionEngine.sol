@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+import "../interfaces/spec/IParametricToken.sol";
 import "../interfaces/IPredictionToken.sol";
 import "../interfaces/IPredictionEngine.sol";
 
@@ -35,7 +36,8 @@ contract PredictionEngine is Ownable, IPredictionEngine {
 
     // ====== STATE ======
 
-    IPredictionToken private _token;
+    IParametricToken private _token;
+    IPredictionToken private _predictionToken;
 
     uint64 private _startPrice;
     mapping(uint64 => RoundData) private _rounds;
@@ -76,7 +78,8 @@ contract PredictionEngine is Ownable, IPredictionEngine {
 
     constructor(address token, uint64 startPrice_) Ownable(msg.sender) {
         require(token != address(0), "Zero token");
-        _token = IPredictionToken(token);
+        _token = IParametricToken(token);
+        _predictionToken = IPredictionToken(token);
         _startPrice = startPrice_;
 
         uint64 startTime = uint64(
@@ -89,7 +92,7 @@ contract PredictionEngine is Ownable, IPredictionEngine {
     }
 
     function setupToken() external onlyOwner {
-        _token.setMaxRounds(MAX_ROUNDS);
+        _predictionToken.setMaxRounds(MAX_ROUNDS);
     }
 
     // ====== FUNCTIONS ======
@@ -142,12 +145,12 @@ contract PredictionEngine is Ownable, IPredictionEngine {
             "Token was already reported"
         );
         require(
-            _token.parameterOf(1, trader, subId) == round,
+            _token.parameterOf(trader, subId, 1) == round,
             "Token has a different round"
         );
 
         // Get prediction price from token
-        uint64 predictionPrice = _token.parameterOf(0, trader, subId);
+        uint64 predictionPrice = _token.parameterOf(trader, subId, 0);
 
         // Get asset price
         uint256 resolutionPrice = data.assetPrice;
@@ -167,7 +170,7 @@ contract PredictionEngine is Ownable, IPredictionEngine {
         data.weights[trader][subId].weight = w;
         data.totalWeight += w;
 
-        _token.burn(trader, subId, balance);
+        _predictionToken.burn(trader, subId, balance);
 
         emit TokenReportedAndBurned(trader, subId, round, balance, w);
     }

@@ -17,38 +17,38 @@ library Lib {
     }
 
     function combine(
-        uint64 a1,
-        uint256 b1,
-        uint64 a2,
-        uint256 b2
+        uint64 fromAnchor,
+        uint256 fromAmount,
+        uint64 toAnchor,
+        uint256 toBalance
     ) external pure returns (uint64 newAnchor, uint256 newBalance) {
         // If either balance is zero, return the other
-        if (b1 == 0) return (a2, b2);
-        if (b2 == 0) return (a1, b1);
+        if (fromAmount == 0) return (toAnchor, toBalance);
+        if (toBalance == 0) return (fromAnchor, fromAmount);
 
         // If anchors are equal, simple sum
-        if (a1 == a2) return (a1, b1 + b2);
+        if (fromAnchor == toAnchor) return (fromAnchor, fromAmount + toBalance);
 
         // Convert to uint256 for arithmetic
-        uint256 anchor1 = uint256(a1);
-        uint256 anchor2 = uint256(a2);
+        uint256 anchor1 = uint256(fromAnchor);
+        uint256 anchor2 = uint256(toAnchor);
 
         // Compute numerator = b1*a1 + b2*a2
-        uint256 numerator = b1 * anchor1 + b2 * anchor2;
+        uint256 numerator = fromAmount * anchor1 + toBalance * anchor2;
 
         // Compute denominator = b1/a1 + b2/a2 = (b1*a2 + b2*a1) / (a1*a2)
-        uint256 productSum = b1 * anchor2 + b2 * anchor1;
+        uint256 productSum = fromAmount * anchor2 + toBalance * anchor1;
         uint256 product = anchor1 * anchor2;
 
         // newAnchor^2 = numerator * product / productSum
         uint256 squared = (numerator * product) / productSum;
 
         // Compute integer square root (anchor has 8 decimals)
-        uint256 anchor3 = sqrt(squared);
+        uint256 resultAnchor = sqrt(squared);
 
-        // newBalance = (productSum / product) * a3
-        newBalance = (productSum * anchor3) / product;
-        newAnchor = uint64(anchor3);
+        // newBalance = (productSum / product) * resultAnchor
+        newBalance = (productSum * resultAnchor) / product;
+        newAnchor = uint64(resultAnchor);
     }
 
     // Babylonian square root (rounded down) for uint256

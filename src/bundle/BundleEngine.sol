@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import "../interfaces/spec/IParametricToken.sol";
 import "../interfaces/IBundleToken.sol";
 import "../interfaces/IBundleEngine.sol";
 import "../libraries/Lib.sol";
@@ -18,7 +19,8 @@ contract BundleEngine is Ownable, IBundleEngine {
 
     // ====== STATE ======
 
-    IBundleToken private _token;
+    IParametricToken private _token;
+    IBundleToken private _bundle;
     IERC20 private _wbtc;
     IERC20 private _inv;
 
@@ -37,7 +39,8 @@ contract BundleEngine is Ownable, IBundleEngine {
         require(inv != address(0), "Zero INV");
         require(initialPrice > 0, "Zero initial price");
 
-        _token = IBundleToken(bundleToken);
+        _token = IParametricToken(bundleToken);
+        _bundle = IBundleToken(bundleToken);
         _wbtc = IERC20(wbtc);
         _inv = IERC20(inv);
         _indexPrice = initialPrice;
@@ -84,7 +87,7 @@ contract BundleEngine is Ownable, IBundleEngine {
         );
 
         // Mint BUN to user (sub-account 0)
-        _token.mint(msg.sender, bunAmount, anchor);
+        _bundle.mint(msg.sender, bunAmount, anchor);
 
         emit Deposited(msg.sender, wbtcAmount, invAmount, bunAmount, anchor);
     }
@@ -95,7 +98,7 @@ contract BundleEngine is Ownable, IBundleEngine {
         require(bunAmount > 0, "Zero amount");
 
         // Get the anchor of the user's sub-account
-        uint64 anchor = _token.parameterOf(0, msg.sender, subId);
+        uint64 anchor = _token.parameterOf(msg.sender, subId, 0);
         require(anchor > 0, "Zero anchor");
 
         // Compute the underlying WBTC and INV amounts for the burned BUN
@@ -105,7 +108,7 @@ contract BundleEngine is Ownable, IBundleEngine {
         );
 
         // Burn the BUN tokens
-        _token.burn(msg.sender, subId, bunAmount);
+        _bundle.burn(msg.sender, subId, bunAmount);
 
         // Transfer underlying assets to user
         if (wbtcReturn > 0) {

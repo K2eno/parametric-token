@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "../interfaces/ITenureToken.sol";
 import "../interfaces/ITenureEngine.sol";
 
-contract TenureEngine is ITenureEngine {
+contract TenureEngine is Ownable, ITenureEngine {
     // ====== CONSTANTS ======
 
     uint64 public constant REWARDS_BASE = 30 days;
@@ -18,7 +20,7 @@ contract TenureEngine is ITenureEngine {
 
     // ====== CONSTRUCTOR ======
 
-    constructor(address token, uint64 rewardsRateBps_) {
+    constructor(address token, uint64 rewardsRateBps_) Ownable(msg.sender) {
         require(token != address(0), "Zero token");
         _token = ITenureToken(token);
         _rewardsRateBps = rewardsRateBps_;

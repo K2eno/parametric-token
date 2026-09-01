@@ -5,7 +5,7 @@ import "./IParametricToken.sol";
 
 /**`
  * @title IParametricTokenNzs
- * @dev Extension of IParametricToken interface to support non-zero-sum parametric transfers. Required to support ERC-165
+ * @dev Extension of IParametricToken interface to support non-zero-sum parametric transfers
  */
 
 interface IParametricTokenNzs is IParametricToken {
@@ -20,7 +20,7 @@ interface IParametricTokenNzs is IParametricToken {
      * @param to The recipient address
      * @param toSubId The recipient's sub-account
      * @param debitAmount The exact amount deducted from the sender's balance
-     * @param creditAmount The exact amount added to the recipient's balance
+     * @param creditAmount The exact amount added to the recipient's balance, can be negative
      * @param incomingParams The full incoming parameter array
      * @param resultingParams The full resulting parameter array
      */
@@ -30,7 +30,7 @@ interface IParametricTokenNzs is IParametricToken {
         address indexed to,
         uint48 toSubId,
         uint256 debitAmount,
-        uint256 creditAmount,
+        int256 creditAmount,
         uint64[] incomingParams,
         uint64[] resultingParams
     );

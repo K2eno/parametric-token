@@ -1,13 +1,26 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import "./IParametricTokenNzs.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-interface IBundleToken is IParametricTokenNzs {
+import "./spec/IParametricToken.sol";
+import "./spec/IParametricTokenNzs.sol";
+
+interface IBundleToken is
+    IERC20Metadata,
+    IERC165,
+    IParametricToken,
+    IParametricTokenNzs
+{
     // ====== FUNCTIONS ======
 
     function mint(address to, uint256 amount, uint64 anchor) external;
     function burn(address from, uint48 subId, uint256 amount) external;
+
+    // ====== SETTERS ======
+
+    function setEngine(address engine_) external;
 
     // ====== GETTERS ======
 
@@ -15,4 +28,5 @@ interface IBundleToken is IParametricTokenNzs {
         address account,
         uint48 subId
     ) external view returns (uint64);
+    function engine() external view returns (address);
 }

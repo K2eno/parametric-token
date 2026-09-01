@@ -2,19 +2,21 @@
 pragma solidity ^0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 /**`
  * @title IParametricToken
- * @dev Extension of ERC20 supporting mutable and immutable parameters and
+ * @dev Extension of ERC-20 supporting mutable and immutable parameters and
  *      allowing a single address to manage multiple sub-accounts (partitions),
- *      each with its own parameters (e.g., mint time)
+ *      each with its own parameters (e.g., mint time). Supports ERC-165
  */
-interface IParametricToken is IERC20 {
-    // ====== CONSTANTS ======
+interface IParametricToken is IERC20, IERC165 {
+    // ====== STRUCTS ======
 
-    enum AccountType {
-        Normal,
-        Super
+    struct ParamConfig {
+        bytes32 name; // Human‑readable identifier (e.g., "mintTime", "anchor")
+        uint8 decimals; // Number of decimals for display
+        bool isMutable; // True if parameter changes during transfers
     }
 
     // ====== EVENTS ======
@@ -47,7 +49,7 @@ interface IParametricToken is IERC20 {
      * @param to The recipient address
      * @param toSubId The recipient's sub-account
      * @param amount The exact amount added to the recipient's balance
-     * @param resultingParams The full resulting parameter array
+     * @param resultingParams The full parameter array of the receiver AFTER parameters update
      */
     event ParametricTransfer(
         address indexed from,
@@ -69,13 +71,15 @@ interface IParametricToken is IERC20 {
      * @param spender The address authorized to spend the tokens
      * @param amount The specific allowance amount for the sub-account
      * @param oneOff `true` if the allowance is one-time use
+     * @param committedUntil Future time if allowance is committed, otherwise 0
      */
     event ApprovalForSub(
         address indexed owner,
         uint48 indexed subId,
         address indexed spender,
         uint256 amount,
-        bool oneOff
+        bool oneOff,
+        uint64 committedUntil
     );
 
     // ====== FUNCTIONS ======
@@ -88,32 +92,37 @@ interface IParametricToken is IERC20 {
      */
     function NUMBER_OF_PARAMETERS() external view returns (uint8);
 
+    /**
+     * @notice Returns metadata for all parameters defined by this token
+     * @return ParamConfig[] Array of metadata sets (name, decimals, isMutable)
+     */
+    function paramConfig() external view returns (ParamConfig[] memory);
+
     // Account management
 
     /**
      * @notice Converts the caller's account from Normal to Super
      * @dev This creates sub-account 0 with the current balance and parameters,
-     *      and clears the Normal account parameters. Only callable by the account owner
-     * @param account The address of the account to convert
+     *      and clears the Normal account parameters
      * @return true if the conversion succeeded
      */
-    function convertToSuper(address account) external returns (bool);
+    function convertToSuper() external returns (bool);
 
     /**
      * @notice Creates a new sub-account for a Super account
-     * @dev Only callable by the owner of the Super account. The new sub-account
-     *      has zero balance and default parameters
-     * @param account The Super account to create a sub-account for
+     * @dev Creates new sub-account to the owner's Super account
+     *      with zero balance and initial (zero) parameters
      * @return subId The index of the newly created sub-account
      */
-    function createSubAccount(address account) external returns (uint48);
+    function createSubAccount() external returns (uint48);
 
     /**
-     * @notice Returns the account type (Normal or Super) for a given address
+     * @notice Returns true if the account is a Super account
+     * @dev This is a compatibility helper for ERC‑20 wallets
      * @param account The address to query
-     * @return AccountType The account type
+     * @return bool True if the account is a Super account
      */
-    function accountType(address account) external view returns (AccountType);
+    function isSuperAccount(address account) external view returns (bool);
 
     // Sub-account queries
 
@@ -142,15 +151,15 @@ interface IParametricToken is IERC20 {
      * @notice Returns the value of a parameter for a given account or sub-account
      * @dev paramIndex must be less than NUMBER_OF_PARAMETERS
      *      For Normal accounts, subId must be 0
-     * @param paramIndex The index of the parameter (0 to NUMBER_OF_PARAMETERS-1)
      * @param account The address of the account
      * @param subId The sub-account index (0 for Normal accounts)
+     * @param paramIndex The index of the parameter (0 to NUMBER_OF_PARAMETERS-1)
      * @return uint64 The parameter value
      */
     function parameterOf(
-        uint8 paramIndex,
         address account,
-        uint48 subId
+        uint48 subId,
+        uint8 paramIndex
     ) external view returns (uint64);
 
     /**
@@ -161,25 +170,25 @@ interface IParametricToken is IERC20 {
      * @param owner The address of the token owner
      * @param subId The sub-account index
      * @param spender The address of the spender
-     * @return (uint256, bool) The allowance amount and whether it is one-off
+     * @return (uint256, bool, uint64) The allowance amount, one-off flag and commitment deadline
      */
-    function allowanceForSub(
+    function allowanceOf(
         address owner,
         uint48 subId,
         address spender
-    ) external view returns (uint256, bool);
+    ) external view returns (uint256, bool, uint64);
 
     /**
      * @notice Returns sub-allowance settings for a given owner and spender
      * @dev Returns (0, 0, false) for Normal accounts
      * @param owner The address of the token owner
      * @param spender The address of the spender
-     * @return (uint48, uint256, bool) The allowance subId, sub amount and whether it is one-off
+     * @return (uint48, uint256, bool, uint64) The allowance subId, sub amount,one-off flag and committment deadline
      */
     function subAllowance(
         address owner,
         address spender
-    ) external view returns (uint48, uint256, bool);
+    ) external view returns (uint48, uint256, bool, uint64);
 
     // Sub-account approval
 
@@ -192,13 +201,15 @@ interface IParametricToken is IERC20 {
      * @param spender The address authorized to spend
      * @param amount The allowance amount (sub-account-specific)
      * @param oneOff If true, the allowance is one-time use
+     * @param committedUntil Future timestamp for allowance commitment deadline, otherwise 0
      * @return true if the approval succeeded
      */
     function approveForSub(
         uint48 ownerSubId,
         address spender,
         uint256 amount,
-        bool oneOff
+        bool oneOff,
+        uint64 committedUntil
     ) external returns (bool);
 
     // Parametric transfers
